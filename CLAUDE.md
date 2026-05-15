@@ -10,7 +10,7 @@ The skeleton under `src/`, `public/`, `.github/workflows/` is the upstream [Char
 
 ## Self-contained
 
-This repo ships its own slash commands under `.claude/commands/` — `/design-stage` for Phase 1, `/build-stage` for Phase 2, `/loop` as the underlying autonomous driver. No global Claude Code config needed.
+This repo ships its own slash commands under `.claude/commands/` — `/design-stage` for Phase 1 and `/build-stage` for Phase 2. (`/loop`, used by `/build-stage`, is a built-in Claude Code skill.)
 
 ## Two-phase workflow
 
