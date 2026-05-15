@@ -1,38 +1,34 @@
 ---
-description: Phase 2 — autonomous build loop. Reads DESIGN.md and STATUS.md, picks the next task, implements, builds, commits, repeats. Exits when STATUS.md shows all done.
+description: Phase 2 — autonomous build loop. Reads DESIGN.md and STATUS.md, implements the next task, builds, commits, pushes. Self-paced via /loop.
 allowed-tools: [Read, Write, Edit, Bash, Glob, Grep, ScheduleWakeup]
 ---
 
 # /build-stage
 
-Enter the Phase 2 autonomous build described in `CLAUDE.md` §"Phase 2 — Autonomous build". This command invokes `/loop` in self-paced mode with the iteration body below.
+Phase 2 of the factory. The user is gone. `DESIGN.md` is the spec, `STATUS.md` is the task list, and you ship until both say done.
 
-## Iteration body
+`CLAUDE.md` covers the API surface, the state layers, the manifest, the deploy mechanics, and the hard rules for autonomous mode. Re-read it at the start of each iteration — it is the contract, not this file.
 
-Each `/loop` iteration:
+This command runs `/loop` self-paced with the iteration below.
 
-1. Read `DESIGN.md` and `STATUS.md`. If `STATUS.md` does not exist or has no task list, generate one from `DESIGN.md` and write it.
-2. Pick the next unchecked task.
-3. Implement it. Edit `src/Stage.tsx`, `src/TestRunner.tsx`, `public/chub_meta.yaml`, etc. Do not ask the user questions — if `DESIGN.md` is ambiguous, make a reasonable choice and record it in `STATUS.md` under "decisions made autonomously".
-4. Run `yarn build`. Fix errors before moving on. If the same build error persists across two iterations, stop the loop and write the blocker to `STATUS.md`.
-5. `git add` only intended files (never `node_modules/`, `dist/`, gitignored paths). Commit with a conventional message. `git push`.
-6. Update `STATUS.md`: mark the task done, note blockers or autonomous decisions.
-7. Schedule the next iteration via `ScheduleWakeup` (pass `/loop` re-entry).
+## One iteration
 
-## Exit conditions (stop scheduling the next wakeup)
+Read `DESIGN.md` and `STATUS.md`. If `STATUS.md` has no task list yet, generate one from `DESIGN.md` and write it before doing anything else.
 
-- `STATUS.md` shows all tasks checked **and** the latest push succeeded the deploy workflow.
-- A build error has persisted across two consecutive iterations (write blocker, stop).
-- An unresolvable ambiguity blocks progress (record in `STATUS.md`, stop).
+Pick the next unchecked task. Implement it — `src/Stage.tsx`, `src/TestRunner.tsx`, `public/chub_meta.yaml`, whatever the task requires. Where `DESIGN.md` is ambiguous, decide and record the decision under "decisions made autonomously" in `STATUS.md`. The user is not available; freezing on ambiguity is worse than a recorded choice.
 
-When exiting, do not call `ScheduleWakeup` — the loop ends naturally.
+Run `yarn build`. Don't skip it. A broken build is a wasted deploy slot.
 
-## Invocation
+Commit per logical chunk with a conventional message. `git add` intended paths only — never `node_modules/`, `dist/`, gitignored files. Push.
 
-This command effectively runs:
+Update `STATUS.md`: tick the task, note any blockers or autonomous decisions.
 
-```
-/loop <iteration body above, with this repo's CLAUDE.md hard rules applied>
-```
+Schedule the next iteration via `ScheduleWakeup`, re-entering `/loop` with this same body.
 
-with no interval, so the model self-paces between iterations.
+## When to stop scheduling
+
+- `STATUS.md` is fully ticked **and** the latest push has gone green through the deploy workflow.
+- `yarn build` has failed with the same error two iterations in a row. Write the blocker to `STATUS.md` and stop.
+- An ambiguity in `DESIGN.md` blocks all remaining tasks and no defensible default exists. Record it and stop.
+
+On stop, do not call `ScheduleWakeup`. The loop ends.
