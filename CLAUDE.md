@@ -8,17 +8,21 @@ This repo is a **factory for one stage**. Clone it, co-design with the user, fil
 
 The skeleton under `src/`, `public/`, `.github/workflows/` is the upstream [CharHubAI/extension-template](https://github.com/CharHubAI/extension-template). The deploy workflow auto-creates the Chub extension on first push to `main` and writes the `extension_id` back into `public/chub_meta.yaml`.
 
+## Self-contained
+
+This repo ships its own slash commands under `.claude/commands/` — `/design-stage` for Phase 1, `/build-stage` for Phase 2, `/loop` as the underlying autonomous driver. No global Claude Code config needed.
+
 ## Two-phase workflow
 
 ### Phase 1 — Co-design (interactive, with the user)
 
 The user opens this repo and describes what they want. You ask clarifying questions until `DESIGN.md` is filled out concretely enough that an autonomous loop can implement it without further input. **The bar for "concrete enough" is: every field in `DESIGN.md` is filled, and the gameplay/UX is unambiguous.**
 
-When the user signals handoff (e.g. "ok go" or `/loop`), Phase 1 ends. Do not start implementing during Phase 1 — design fidelity matters more than speed.
+When the user runs `/build-stage`, Phase 1 ends. Do not start implementing during Phase 1 — design fidelity matters more than speed.
 
 ### Phase 2 — Autonomous build (no further user input)
 
-Driven by `/loop` (self-paced). Each iteration:
+Driven by `/build-stage`, which invokes `/loop` (self-paced). Each iteration:
 
 1. Read `DESIGN.md` and `STATUS.md` (creating `STATUS.md` on first run).
 2. Pick the next unchecked item from `STATUS.md`'s task list, or generate the task list if empty.
