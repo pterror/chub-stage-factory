@@ -80,6 +80,25 @@ lookup after you know what you're looking for.
 - `class RngStream { next(); float(); range(lo, hi); pick(arr); pickN(arr, n, replace?); weightedPick(items); dice(notation); shuffle(arr) }`
 - `class Rng { static fromSeed(seed); stream(name); mechanical; cosmetic; toJSON(); static fromJSON(data) }`
 
+## `procgen.ts`
+
+- `interface WeightedEntry<T> { value, weight }`
+- `weightedPick(table, rng): T`
+- `weightedPickN(table, n, rng, replace?=true): T[]`
+- `interface GraphNode { id, neighbors, tags? }`
+- `type Connectivity = "tree" | "mesh" | "ring" | "sparse" | "dense"`
+- `interface NodeSpec { id, tags? }`
+- `interface GraphConstraints { minDegree?, maxDegree?, mustInclude? }`
+- `interface BuildGraphOptions { nodeCount, connectivity, constraints?, idPrefix?, rng }`
+- `buildGraph(opts): GraphNode[]`
+- `interface BuildGridOptions { width, height, wrap?, idPrefix? }`
+- `buildGrid(opts): GraphNode[]`
+- `type FieldSpec = { kind: "pick"; from } | { kind: "range"; min, max } | { kind: "int"; min, max } | { kind: "compose"; from } | { kind: "literal"; value }`
+- `interface Template<T> { fields }`
+- `instantiate<T>(template, rng): T`
+- `randomId(rng, prefix?="id"): string`
+- `pickName(table, rng): string`
+
 ## `stats.ts`
 
 - `type ModifierKind = "flat" | "mult" | "add" | "habituation"`
@@ -188,6 +207,28 @@ lookup after you know what you're looking for.
   - `isPlaceholder(id): boolean`
   - `waitFor(id, timeoutMs?): Promise<T>` — resolves immediately if real
 
+## `actor.ts`
+
+- `type ActorId = string`
+- `type StatName = string`
+- `interface ActorInit { id, name, body?, inventory?, stats?, location?, owner?, affinity?, tags? }`
+- `interface ActorJSON { id, name, body, inventory, stats, location?, owner?, affinity, tags }`
+- `interface ActorDeps { statTiers?, itemDefs? }`
+- `class Actor`
+  - `id; name; body; inventory; stats; location?; owner?; affinity; tags`
+  - `constructor(init: ActorInit)`
+  - `getStat(name)`, `setStat(name, stat)`, `hasStat(name)`
+  - `getAffinity(other)`, `setAffinity(other, value)` — value=0 removes (sparse)
+  - `adjustAffinity(other, delta): number`
+  - `toJSON(): ActorJSON`, `static fromJSON(data, deps?): Actor`
+- `class ActorPool`
+  - `actors: Map<ActorId, Actor>`
+  - `constructor(initial?: Iterable<Actor>)`
+  - `add(a)`, `get(id)`, `require(id)`, `has(id)`, `delete(id)`, `size()`
+  - `forEach(fn)`, `filter(pred)`, `map(fn)`, `all()`
+  - `byTag(tag)`, `byOwner(ownerId)`, `byLocation(loc)`
+  - `toJSON(): Record<ActorId, ActorJSON>`, `static fromJSON(data, deps?): ActorPool`
+
 ## `timeline.ts`
 
 - `interface TimelineEvent<E> { at, payload }`
@@ -227,6 +268,15 @@ lookup after you know what you're looking for.
 - `llmClassifier(generator, opts?): Classifier`
 - `interface LocalPipe { (text, labels) => Promise<{ labels, scores }> }`
 - `localTransformerClassifier(pipe): Classifier`
+
+## `generate.ts`
+
+- `type SchemaParser<T> = (response: string) => T | null`
+- `interface GenerateOptions<T> { prompt, generator, schema?, retries?=3, cacheKey?, cache?: PlaceholderRegistry<T>, maxTokens?=500, onRetry? }`
+- `generate<T>(opts): Promise<T>` — retries with self-correcting prompt on schema parse failure; throws after retries exhausted
+- `interface GenerativeRegistryOptions<T> { base, generator, promptFor, schema, retries?, maxTokens?, placeholderFor? }`
+- `interface GenerativeRegistry<T> { base: PlaceholderRegistry<T>; getOrGenerate(id): Promise<T> }`
+- `generativeRegistry<T>(opts): GenerativeRegistry<T>` — cache-by-key + auto-generate-on-miss; concurrent calls for same id coalesce
 
 ## `chub-adapters.ts`
 
