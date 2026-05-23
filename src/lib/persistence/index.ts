@@ -41,4 +41,5 @@ export {
   mergeResponses,
   shard,
   shardOf,
+  counterShard,
 } from "./chub";

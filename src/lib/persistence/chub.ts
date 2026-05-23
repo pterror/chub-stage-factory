@@ -203,6 +203,19 @@ export function shard<T extends object, M>(
   };
 }
 
+/** Shard a simple `{ n: number }` tick counter with the standard
+ *  messageState+chubTreeHistory wiring. Use when the shard contains
+ *  ONLY a counter — if it carries extra fields (mode, lastAction, etc.)
+ *  use `shard` directly. */
+export function counterShard(
+  name: string,
+  box: { n: number },
+  backend: SaveBackend,
+  history: History<number>,
+): Shard<number> {
+  return shard(name, box, (b) => b.n, (n: number) => ({ n }), backend, history);
+}
+
 /** Convenience wrapper around `shard` for classes with `toJSON()`.
  *  Calls `instance.toJSON()` automatically; M is inferred from its
  *  return type. Eliminates the `ReturnType<T["toJSON"]>` annotation. */

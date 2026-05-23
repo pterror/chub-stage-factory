@@ -80,6 +80,18 @@ class MyStage extends StageBase<Init, Chat, Msg, Config> {
 }
 ```
 
+## `counterShard` — pure tick counters
+
+When a shard holds only a `{ n: number }` box, `counterShard` is a one-liner:
+
+```ts
+tick = { n: 0 };
+// ...
+tick: counterShard("tick", this.tick, this.layers.messageStateBackend, chubTreeHistory()),
+```
+
+If the box carries extra fields (`mode`, `lastAction`, `hp`, etc.), use `shard` directly.
+
 ## Choosing `shardOf` vs `shard`
 
 | situation | use |
