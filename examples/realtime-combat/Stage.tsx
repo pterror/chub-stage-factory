@@ -7,10 +7,14 @@
  * between messages and returns the resulting events.
  *
  * Primitives: combat-realtime (RealtimeWorld + AttackDef), physics (under
- * the hood), rng (cosmetic spread), scheduler (could orchestrate waves —
- * stubbed to "spawn one per turn").
+ * the hood), rng (cosmetic spread), persistence.
  * Philosophy: rule #5 (tick(dt) returns events), rule #2 (Attacks are
  * instances of AttackDefs).
+ *
+ * Persistence: world (combatants only) + tick on messageState +
+ * chubTreeHistory — swiping re-rolls one beat of arena combat. rng on
+ * initState + noHistory. (RealtimeWorld has no built-in toJSON; we
+ * serialize combatants inline as the only mutable state worth keeping.)
  */
 
 import { ReactElement } from "react";
@@ -21,13 +25,15 @@ import { Rng } from "../../src/lib/rng";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import {
+  PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
+  bindStore, mergeResponses, shard,
+} from "../../src/lib/persistence";
 
-interface MessageStateType {
-  ticks: number; hp: number;
-  combatants?: Array<Omit<RealtimeCombatant, 'vel'> & { vel: { x: number; y: number } }>;
-  rng?: { seed: string; streams: Record<string, [number, number, number, number]> };
-}
-type ChatStateType = null; type InitStateType = null; type ConfigType = null;
+interface MessageStateType { ticks: number; hp: number; [k: string]: unknown }
+type ChatStateType = null;
+type InitStateType = { [k: string]: unknown };
+type ConfigType = null;
 
 const BULLET: AttackDef = {
   id: "bullet", shape: "circle", duration: 1.5, pierces: 1, damage: 6, effects: [],
@@ -37,17 +43,51 @@ const BULLET: AttackDef = {
 const ARENA = { w: 240, h: 160 };
 const ARENA_BOUNDS = { minX: 0, maxX: ARENA.w, minY: 0, maxY: ARENA.h };
 
+interface WorldSnap { combatants: RealtimeCombatant[] }
+
 export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   world = new RealtimeWorld(48, ARENA_BOUNDS);
   rng = Rng.fromSeed("arena");
-  msg: MessageStateType = { ticks: 0, hp: 30 };
+  tick = { n: 0, hp: 30 };
+  worldHolder = { world: this.world };
   events: RealtimeEvent[] = [];
+  layers = createChubLayers();
+  store!: PersistenceStore;
+  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    if (data.messageState) this.msg = { ...this.msg, ...data.messageState };
-    this.world.add({ id: "you", pos: { x: ARENA.w / 2, y: ARENA.h / 2 }, vel: { x: 0, y: 0 }, radius: 6, team: "p", hp: this.msg.hp });
+    this.world.add({ id: "you", pos: { x: ARENA.w / 2, y: ARENA.h / 2 }, vel: { x: 0, y: 0 }, radius: 6, team: "p", hp: this.tick.hp });
     for (let i = 0; i < 3; i++) this.spawnDrone(i);
+
+    this.layers = createChubLayers({
+      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
+      initState: (data.initState as Record<string, string | undefined> | null) ?? null,
+    });
+    this.store = new PersistenceStore({
+      rng: shard("rng", this.rng,
+        (i) => i.toJSON(),
+        (d: ReturnType<Rng["toJSON"]>) => Rng.fromJSON(d),
+        this.layers.initStateBackend, noHistory()),
+      tick: shard("tick", this.tick,
+        (i) => ({ n: i.n, hp: i.hp }),
+        (d: { n: number; hp: number }) => ({ n: d.n, hp: d.hp }),
+        this.layers.messageStateBackend, chubTreeHistory()),
+      world: shard("world", this.worldHolder,
+        (h): WorldSnap => ({
+          combatants: [...h.world.combatants.values()].map((c) => ({ ...c, pos: { ...c.pos }, vel: { ...c.vel } })),
+        }),
+        (d: WorldSnap) => {
+          const w = new RealtimeWorld(48, ARENA_BOUNDS);
+          for (const c of d.combatants) w.add({ ...c, pos: { ...c.pos }, vel: { ...c.vel } });
+          // Mutate this.world in place so existing references stay valid.
+          this.world.combatants.clear();
+          for (const c of w.combatants.values()) this.world.combatants.set(c.id, c);
+          return { world: this.world };
+        },
+        this.layers.messageStateBackend, chubTreeHistory()),
+    });
+    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
   }
 
   private spawnDrone(i: number) {
@@ -58,48 +98,40 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
     const py = cy + Math.sin(angle) * r;
     this.world.add({
       id: `drone-${i}-${this.rng.cosmetic.next()}`,
-      pos: { x: px, y: py },
-      vel: { x: (cx - px) * 0.2, y: (cy - py) * 0.2 },
+      pos: { x: px, y: py }, vel: { x: (cx - px) * 0.2, y: (cy - py) * 0.2 },
       radius: 4, team: "e", hp: 4,
     });
   }
 
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    return { success: true, error: null, initState: null, chatState: null };
+    await this.store.load();
+    await this.bound.initial();
+    return {
+      success: true, error: null,
+      initState: (this.layers.mirror.initState as InitStateType | null) ?? null,
+      chatState: null,
+      messageState: (this.layers.mirror.messageState as MessageStateType | null) ?? null,
+    };
   }
+
   async setState(state: MessageStateType): Promise<void> {
-    if (!state) return;
-    this.msg = { ...this.msg, ...state };
-    // Restore combatant positions and RNG for swipe-safety.
-    if (state.combatants) {
-      this.world = new RealtimeWorld(48, ARENA_BOUNDS);
-      for (const c of state.combatants) this.world.add({ ...c });
-    }
-    if (state.rng) this.rng = Rng.fromJSON(state.rng);
+    await this.bound.setState(state);
   }
 
   private observationSources(): ObservationSource<{ now: number }>[] {
     return [
       {
-        id: "world",
-        channels: ["visual"],
-        salience: () => 1,
-        habituationTau: 0,
-        properties: {
-          visual: {
-            combatants: () => [...this.world.combatants.values()].map((c) => ({
-              id: c.id, team: c.team, hp: c.hp,
-              pos: { x: Math.round(c.pos.x), y: Math.round(c.pos.y) },
-            })),
-            attacks: () => this.world.attacks.length,
-          },
-        },
+        id: "world", channels: ["visual"], salience: () => 1, habituationTau: 0,
+        properties: { visual: {
+          combatants: () => [...this.world.combatants.values()].map((c) => ({
+            id: c.id, team: c.team, hp: c.hp, pos: { x: Math.round(c.pos.x), y: Math.round(c.pos.y) },
+          })),
+          attacks: () => this.world.attacks.length,
+        } },
       },
       {
-        id: "events",
-        channels: ["auditory"],
-        salience: () => Math.min(1, this.events.length / 6),
-        habituationTau: 1,
+        id: "events", channels: ["auditory"],
+        salience: () => Math.min(1, this.events.length / 6), habituationTau: 1,
         properties: { auditory: { last: () => this.events.slice(-15) } },
       },
     ];
@@ -115,9 +147,9 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
     }, now);
   }
 
-  async beforePrompt(_userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = ++this.msg.ticks;
-    const observed = assembleObservations(this.observationSources(), { now }, { now, maxCount: 3 });
+  async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    this.tick.n += 1;
+    const observed = assembleObservations(this.observationSources(), { now: this.tick.n }, { now: this.tick.n, maxCount: 3 });
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["fragment_cascade", "terminal_sense_shift"],
@@ -128,33 +160,29 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
         "as the prose; don't invent hits the events don't show. " +
         "An `out-of-bounds` event means the projectile left the arena — narrate it as a miss.",
     });
-    this.msg.combatants = [...this.world.combatants.values()].map((c) => ({ ...c, pos: { ...c.pos }, vel: { ...c.vel } }));
-    this.msg.rng = this.rng.toJSON();
-    return { stageDirections, messageState: this.msg };
+    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
   }
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = this.msg.ticks;
+    const now = this.tick.n;
     const r = parseTags<Record<string, unknown>>(botMessage.content, { shoot: { kind: "list" } });
     if (Array.isArray(r.parsed.shoot) && r.parsed.shoot.length === 2) {
       const [dx, dy] = (r.parsed.shoot as string[]).map(Number);
       if (Number.isFinite(dx) && Number.isFinite(dy)) this.shoot(dx, dy, now);
     }
-    // Simulate ~0.5s in 5 ticks; out-of-bounds attacks are auto-culled by RealtimeWorld.
     this.events = [];
     for (let i = 0; i < 5; i++) this.events.push(...this.world.tick(0.1, now + i * 0.1));
-    // out-of-bounds events are included in this.events; stage surfaces them to LLM via observations.
-    // Spawn another drone every 3 turns
     if (now % 3 === 0) this.spawnDrone(now);
     const you = this.world.combatants.get("you");
-    if (you) this.msg.hp = you.hp;
-    return { messageState: this.msg, modifiedMessage: r.stripped !== botMessage.content ? r.stripped : null };
+    if (you) this.tick.hp = you.hp;
+    const stripped = r.stripped !== botMessage.content ? r.stripped : null;
+    return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
   }
 
   render(): ReactElement {
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Arena — tick {this.msg.ticks} — HP {this.msg.hp}</h3>
+        <h3 style={{ marginTop: 0 }}>Arena — tick {this.tick.n} — HP {this.tick.hp}</h3>
         <svg width={480} height={320} viewBox={`0 0 ${ARENA.w} ${ARENA.h}`} style={{ background: "#1a1a22", border: "1px solid #444" }}>
           {[...this.world.combatants.values()].map((c) => (
             <circle key={c.id} cx={c.pos.x} cy={c.pos.y} r={c.radius} fill={c.team === "p" ? "#7df" : c.hp > 0 ? "#f77" : "#444"} />

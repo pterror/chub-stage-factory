@@ -10,40 +10,47 @@
  *      affecting their stats; effects from cyberware (fast-twitch -> +dodge).
  *
  * One stage, one prompt block, one observation payload, every primitive
- * speaking through tags. ~330 LOC; if it were really hard, the primitives
- * would have failed the dogfood test.
+ * speaking through tags. If it were really hard, the primitives would
+ * have failed the dogfood test.
  *
  * Primitives: body, transformation, equipment, inventory, combat-turn,
- * effects, observation, prose-register, tag-parser, chub-adapters, rng.
- * Philosophy: every rule in lib/README.md is exercised somewhere here —
- * the LLM controls action selection through tags, the stage maintains the
- * world model, and prose emerges from the LLM's reading of the
- * observation block.
+ * effects, observation, prose-register, tag-parser, chub-adapters, rng,
+ * persistence.
+ *
+ * Persistence — the showcase: every regime side-by-side.
+ *   - body, loadout on chatState + forbidBranching (canon, surgery sticks)
+ *   - inv on messageState + chubTreeHistory (swipe can un-take an item)
+ *   - mode/tick on messageState + chubTreeHistory (per-branch turn)
+ *   - rng on initState + noHistory
+ *   - combatants on chatState + forbidBranching (the scav, like the
+ *     duellist, is a person — combat damage carries across swipes)
+ *   - "Save Slot" button calls store.saveSlot("manual") writing to every
+ *     shard's backend prefixed; "Load Slot" restores them in lockstep.
  */
 
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { Body, TransformationInstance } from "../../src/lib/body";
+import { Body } from "../../src/lib/body";
 import { TransformationDef, apply as applyTf } from "../../src/lib/transformation";
 import { EquipmentDef, Loadout, fromDict as eqFromDict } from "../../src/lib/equipment";
-import { Inventory, ItemDef, Stack, SpotMeta } from "../../src/lib/inventory";
+import { Inventory } from "../../src/lib/inventory";
 import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, runRound, AttackProfile, CombatEvent } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
 import { Rng } from "../../src/lib/rng";
-import { parseTags, parseTagsBatch } from "../../src/lib/tag-parser";
+import { parseTagsBatch } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import {
+  PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching, noHistory,
+  bindStore, mergeResponses, shard,
+} from "../../src/lib/persistence";
 
-interface MessageStateType {
-  ticks: number; mode: "shop" | "combat" | "ended";
-  ended?: "pc-down" | "enemy-down"; lastAction?: string;
-  body?: { baseSlots: Record<string, string[]>; transformations: TransformationInstance[] };
-  loadout?: { equipped: Record<string, { defId: string; equippedAt: number; snapshotTags: string[] }> };
-  inv?: { defs: ItemDef[]; spots: Record<string, Stack[]>; meta: Record<string, SpotMeta> };
-}
-type ChatStateType = null; type InitStateType = null; type ConfigType = null;
+interface MessageStateType { ticks: number; mode: "shop" | "combat" | "ended"; lastAction?: string; [k: string]: unknown }
+interface ChatStateType { [k: string]: unknown }
+type InitStateType = { [k: string]: unknown };
+type ConfigType = null;
 
 const TFS: Record<string, TransformationDef> = {
   install_neural_port: { id: "install_neural_port", slot: "head", addTags: ["neural-port"], removeTags: ["flesh-only"], baseDuration: null, conflicts: {}, displayName: "neural port install" },
@@ -56,41 +63,89 @@ const MODS: Record<string, EquipmentDef> = {
   reflex_booster: eqFromDict({ id: "reflex_booster", slot: "torso", constraints: ["spinal-port"], onConflict: "unequip", grantsTags: ["fast-twitch"], displayName: "reflex booster" }),
 };
 
-// Cyberware grants come back as an effect when equipped, so combat sees them.
 const REFLEX_EFFECT: EffectDef = {
   id: "fast-twitch", stacking: "replace", duration: null,
   targets: { stats: ["dodge"], tags: ["fast-twitch"] },
   baseMagnitudes: { stats: { dodge: 0.2 }, tagsAdd: ["fast-twitch"] },
 };
+const HACK_EFFECT: EffectDef = {
+  id: "hacked", stacking: "replace", duration: 2,
+  targets: { stats: ["dodge"] }, baseMagnitudes: { stats: { dodge: -0.2 } },
+};
+const EFFECT_DEFS: Record<string, EffectDef> = {
+  [REFLEX_EFFECT.id]: REFLEX_EFFECT, [HACK_EFFECT.id]: HACK_EFFECT,
+};
 
 const SWING: ActionDef<Combatant, Combatant, World> = { id: "swing", costs: { ap: 1 }, range: 1, effects: [], targetFilter: (a, t) => t.hp > 0 && t.id !== a.id };
 const HACK: ActionDef<Combatant, Combatant, World> = {
-  id: "hack", costs: { ap: 2 }, range: 99, effects: [{
-    id: "hacked", stacking: "replace", duration: 2,
-    targets: { stats: ["dodge"] }, baseMagnitudes: { stats: { dodge: -0.2 } },
-  }],
+  id: "hack", costs: { ap: 2 }, range: 99, effects: [HACK_EFFECT],
   targetFilter: (a, t) => t.hp > 0 && t.id !== a.id && (a.tags?.includes("jacked-in-capable") ?? false),
 };
-
 const ATTACK: AttackProfile = { damage: 6, type: "slash", crit: 0.1, accuracy: 0.85 };
+
+interface CombatantSnap { id: string; hp: number; ap: number; tags: string[]; effects: ReturnType<EffectStore["toJSON"]> }
+interface CombatantsSnap { items: CombatantSnap[]; ended?: "pc-down" | "enemy-down" }
+
+function buildCombatants(grantTags: string[], grantEffects: EffectDef[], now: number): Combatant[] {
+  const pcStore = new EffectStore();
+  for (const e of grantEffects) pcStore.apply(e, now);
+  return [
+    { id: "pc", initiative: 12, hp: 28, resources: { ap: 3 },
+      position: { x: 0, y: 0 }, stats: { dodge: 0.1, armor: 1 }, tags: grantTags, effects: pcStore },
+    { id: "scav", initiative: 9, hp: 22, resources: { ap: 2 },
+      position: { x: 1, y: 0 }, stats: { dodge: 0.05, armor: 2 }, effects: new EffectStore() },
+  ];
+}
+
+function snapCombatants(holder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" }): CombatantsSnap {
+  return {
+    items: holder.cs.map((c) => ({
+      id: c.id, hp: c.hp, ap: c.resources?.ap ?? 0,
+      tags: c.tags ?? [],
+      effects: c.effects?.toJSON() ?? { instances: [] },
+    })),
+    ended: holder.ended,
+  };
+}
+function restoreCombatants(holder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" }, data: CombatantsSnap): void {
+  if (holder.cs.length === 0) {
+    // Pre-build skeletons if we deserialize before buildCombat runs.
+    holder.cs = buildCombatants([], [], 0);
+  }
+  for (const snap of data.items) {
+    let c = holder.cs.find((x) => x.id === snap.id);
+    if (!c) {
+      c = { id: snap.id, initiative: 10, hp: snap.hp, resources: { ap: snap.ap },
+        position: { x: 0, y: 0 }, stats: {}, effects: new EffectStore(), tags: snap.tags };
+      holder.cs.push(c);
+    }
+    c.hp = snap.hp;
+    if (c.resources) c.resources.ap = snap.ap;
+    c.tags = snap.tags;
+    c.effects = EffectStore.fromJSON(snap.effects, EFFECT_DEFS);
+  }
+  holder.ended = data.ended;
+}
 
 export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   body: Body;
   loadout: Loadout;
   inv: Inventory;
   rng = Rng.fromSeed("mavens-clinic");
-  combatants: Combatant[] = [];
+  combatantsHolder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" } = { cs: [] };
   events: CombatEvent[] = [];
-  msg: MessageStateType = { ticks: 0, mode: "shop" };
+  tick = { n: 0, mode: "shop" as "shop" | "combat" | "ended", lastAction: undefined as string | undefined };
   pcChoice: "swing" | "hack" = "swing";
+  layers = createChubLayers();
+  store!: PersistenceStore;
+  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
+  slotMsg: string | null = null;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
     this.body = new Body({
-      head: ["flesh-only", "hair-short"],
-      torso: ["flesh-only"],
-      arms: ["human", "hands"],
-      legs: ["human", "feet"],
+      head: ["flesh-only", "hair-short"], torso: ["flesh-only"],
+      arms: ["human", "hands"], legs: ["human", "feet"],
     });
     this.loadout = new Loadout(this.body);
     this.inv = new Inventory();
@@ -104,22 +159,45 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
     this.inv.add("counter", "reflex_booster");
     this.inv.add("locker", "stim", 3);
     this.inv.add("pocket", "credchip");
-    if (data.messageState) this.msg = { ...this.msg, ...data.messageState };
+
+    this.layers = createChubLayers({
+      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
+      chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
+      initState: (data.initState as Record<string, string | undefined> | null) ?? null,
+    });
+    this.store = new PersistenceStore({
+      rng: shard("rng", this.rng, (i) => i.toJSON(), (d: ReturnType<Rng["toJSON"]>) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
+      tick: shard("tick", this.tick,
+        (i) => ({ n: i.n, mode: i.mode, lastAction: i.lastAction }),
+        (d: { n: number; mode: "shop" | "combat" | "ended"; lastAction?: string }) => ({ n: d.n, mode: d.mode, lastAction: d.lastAction }),
+        this.layers.messageStateBackend, chubTreeHistory()),
+      inv: shard("inv", this.inv, (i) => i.toJSON(), (d: ReturnType<Inventory["toJSON"]>) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
+      body: shard("body", this.body, (i) => i.toJSON(), (d: ReturnType<Body["toJSON"]>) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      loadout: shard("loadout", this.loadout, (i) => i.toJSON(), (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      combatants: shard("combatants", this.combatantsHolder,
+        (h) => snapCombatants(h),
+        (d: CombatantsSnap) => {
+          restoreCombatants(this.combatantsHolder, d);
+          return this.combatantsHolder;
+        },
+        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+    });
+    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
   }
 
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    return { success: true, error: null, initState: null, chatState: null };
+    await this.store.load();
+    await this.bound.initial();
+    return {
+      success: true, error: null,
+      initState: (this.layers.mirror.initState as InitStateType | null) ?? null,
+      chatState: (this.layers.mirror.chatState as ChatStateType | null) ?? null,
+      messageState: (this.layers.mirror.messageState as MessageStateType | null) ?? null,
+    };
   }
+
   async setState(state: MessageStateType): Promise<void> {
-    if (!state) return;
-    this.msg = { ...this.msg, ...state };
-    // Restore stateful primitives from serialized snapshots so swipes don't lose state.
-    if (state.body) {
-      this.body = Body.fromJSON(state.body);
-      this.loadout = new Loadout(this.body);
-      if (state.loadout) this.loadout = Loadout.fromJSON(state.loadout, this.body, MODS);
-    }
-    if (state.inv) this.inv = Inventory.fromJSON(state.inv);
+    await this.bound.setState(state);
   }
 
   private grantsForEquipped(): { tags: string[]; effects: EffectDef[] } {
@@ -133,17 +211,8 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
 
   private buildCombat() {
     const { tags, effects } = this.grantsForEquipped();
-    const pcStore = new EffectStore();
-    for (const eff of effects) pcStore.apply(eff, this.msg.ticks);
-    const pc: Combatant = {
-      id: "pc", initiative: 12, hp: 28, resources: { ap: 3 },
-      position: { x: 0, y: 0 }, stats: { dodge: 0.1, armor: 1 }, tags, effects: pcStore,
-    };
-    const scav: Combatant = {
-      id: "scav", initiative: 9, hp: 22, resources: { ap: 2 },
-      position: { x: 1, y: 0 }, stats: { dodge: 0.05, armor: 2 }, effects: new EffectStore(),
-    };
-    this.combatants = [pc, scav];
+    this.combatantsHolder.cs = buildCombatants(tags, effects, this.tick.n);
+    this.combatantsHolder.ended = undefined;
   }
 
   private chooseFor = (actor: Combatant, world: World) => {
@@ -160,71 +229,57 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
     const baseSources: ObservationSource<{ now: number }>[] = [
       {
         id: "body", channels: ["interoceptive"], salience: () => 0.4, habituationTau: 6,
-        properties: {
-          interoceptive: {
-            slots: () => {
-              const out: Record<string, string[]> = {};
-              for (const [s, t] of this.body.getAllEffectiveTags()) out[s] = t.toArray();
-              return out;
-            },
-          },
-        },
+        properties: { interoceptive: { slots: () => {
+          const out: Record<string, string[]> = {};
+          for (const [s, t] of this.body.getAllEffectiveTags()) out[s] = t.toArray();
+          return out;
+        } } },
       },
       {
         id: "loadout", channels: ["visual"], salience: () => 0.4, habituationTau: 6,
-        properties: {
-          visual: {
-            equipped: () => [...this.loadout.getAllEquipped()].map(([slot, inst]) => ({
-              slot, id: inst.def.id, fit: this.loadout.fit(slot, now)?.fit,
-            })),
-            grants: () => this.grantsForEquipped().tags,
-            violations: () => this.loadout.checkAllConstraints(),
-          },
-        },
+        properties: { visual: {
+          equipped: () => [...this.loadout.getAllEquipped()].map(([slot, inst]) => ({ slot, id: inst.def.id, fit: this.loadout.fit(slot, now)?.fit })),
+          grants: () => this.grantsForEquipped().tags,
+          violations: () => this.loadout.checkAllConstraints(),
+        } },
       },
     ];
-    if (this.msg.mode === "shop") {
+    if (this.tick.mode === "shop") {
       baseSources.push({
         id: "shop", channels: ["visual"], salience: () => 0.5, habituationTau: 4,
-        properties: {
-          visual: {
-            inventory: () => {
-              const out: Record<string, { item: string; count: number }[]> = {};
-              for (const spot of this.inv.spots()) {
-                out[spot] = this.inv.contents(spot).map((s) => ({
-                  item: this.inv.getDef(s.defId)?.displayName ?? s.defId, count: s.count,
-                }));
-              }
-              return out;
-            },
-            available_tfs: () => Object.keys(TFS),
-            available_equip: () => Object.entries(MODS).map(([id, m]) => ({ id, slot: m.slot, requires: m.constraints })),
+        properties: { visual: {
+          inventory: () => {
+            const out: Record<string, { item: string; count: number }[]> = {};
+            for (const spot of this.inv.spots()) {
+              out[spot] = this.inv.contents(spot).map((s) => ({ item: this.inv.getDef(s.defId)?.displayName ?? s.defId, count: s.count }));
+            }
+            return out;
           },
-        },
+          available_tfs: () => Object.keys(TFS),
+          available_equip: () => Object.entries(MODS).map(([id, m]) => ({ id, slot: m.slot, requires: m.constraints })),
+        } },
       });
     } else {
       baseSources.push({
         id: "combat", channels: ["visual"], salience: () => 1, habituationTau: 0,
-        properties: {
-          visual: {
-            combatants: () => this.combatants.map((c) => ({
-              id: c.id, hp: c.hp, ap: c.resources?.ap ?? 0,
-              dodge: (c.stats?.dodge ?? 0) + (c.effects?.totalMagnitudes(now).stats?.dodge ?? 0),
-              tags: c.tags ?? [],
-              effects: c.effects?.active().map((i) => i.id) ?? [],
-            })),
-            last_events: () => this.events.slice(-12),
-          },
-        },
+        properties: { visual: {
+          combatants: () => this.combatantsHolder.cs.map((c) => ({
+            id: c.id, hp: c.hp, ap: c.resources?.ap ?? 0,
+            dodge: (c.stats?.dodge ?? 0) + (c.effects?.totalMagnitudes(now).stats?.dodge ?? 0),
+            tags: c.tags ?? [], effects: c.effects?.active().map((i) => i.id) ?? [],
+          })),
+          last_events: () => this.events.slice(-12),
+        } },
       });
     }
     return baseSources;
   }
 
-  async beforePrompt(_userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = ++this.msg.ticks;
+  async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    this.tick.n += 1;
+    const now = this.tick.n;
     const observed = assembleObservations(this.observationSources(now), { now }, { now, maxCount: 5 });
-    const prefix = this.msg.mode === "shop"
+    const prefix = this.tick.mode === "shop"
       ? "Maven runs the clinic. Tags she understands from you (the LLM): " +
         "`<install>install_neural_port|install_spinal_port|fleshweave</install>`, " +
         "`<equip>deckjack|reflex_booster</equip>`, `<unequip>head|torso</unequip>`, " +
@@ -236,19 +291,15 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
         "render it; do not invent hits.";
     const stageDirections = emitStageDirections({
       observations: observed,
-      architectures: this.msg.mode === "shop" ? ["body_then_world", "appositive_fold"] : ["fragment_cascade", "terminal_sense_shift"],
+      architectures: this.tick.mode === "shop" ? ["body_then_world", "appositive_fold"] : ["fragment_cascade", "terminal_sense_shift"],
       register: { pov: "close-second", tense: "present", distance: "close" },
       prefix,
     });
-    this.msg.body = this.body.toJSON();
-    this.msg.loadout = this.loadout.toJSON();
-    this.msg.inv = this.inv.toJSON();
-    return { stageDirections, messageState: this.msg };
+    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
   }
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = this.msg.ticks;
-    // Use parseTagsBatch to collapse 6 chained parseTags calls into one.
+    const now = this.tick.n;
     const [r1, r2, r3, r4, r5, r6] = parseTagsBatch(botMessage.content, [
       { install: { kind: "string", enum: Object.keys(TFS) } },
       { equip: { kind: "string", enum: Object.keys(MODS) } },
@@ -257,64 +308,87 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
       { start_combat: { kind: "bool" } },
       { action: { kind: "string", enum: ["swing", "hack"] } },
     ]);
-    let text = r6.stripped;
+    const text = r6.stripped;
 
-    if (this.msg.mode === "shop") {
+    if (this.tick.mode === "shop") {
       if (typeof r1.parsed.install === "string" && r1.parsed.install) {
         applyTf(TFS[r1.parsed.install as string], this.body, now);
-        this.msg.lastAction = `installed:${r1.parsed.install}`;
+        this.tick.lastAction = `installed:${r1.parsed.install}`;
       }
       if (typeof r2.parsed.equip === "string" && r2.parsed.equip) {
         const res = this.loadout.equip(MODS[r2.parsed.equip as string], now);
-        this.msg.lastAction = res.ok ? `equipped:${r2.parsed.equip}` : `equip-failed:${(res as { reason: string }).reason}`;
+        this.tick.lastAction = res.ok ? `equipped:${r2.parsed.equip}` : `equip-failed:${(res as { reason: string }).reason}`;
       }
       if (typeof r3.parsed.unequip === "string" && r3.parsed.unequip) {
         this.loadout.unequip(r3.parsed.unequip as string);
-        this.msg.lastAction = `unequipped:${r3.parsed.unequip}`;
+        this.tick.lastAction = `unequipped:${r3.parsed.unequip}`;
       }
       if (typeof r4.parsed.take === "string" && r4.parsed.take) {
         const found = this.inv.find(r4.parsed.take as string);
         if (found.length) {
           const def = this.inv.getDef(r4.parsed.take as string);
-          // capacityOK: check weight/bulk before moving (demonstrates gap #4).
           if (def && !this.inv.capacityOK("pocket", def, 1)) {
             const v = this.inv.capacityViolation("pocket", def, 1);
-            this.msg.lastAction = `take-refused:${r4.parsed.take}:${v?.kind}-over-${v?.overBy?.toFixed(1)}`;
+            this.tick.lastAction = `take-refused:${r4.parsed.take}:${v?.kind}-over-${v?.overBy?.toFixed(1)}`;
           } else {
             this.inv.move(found[0].spot, "pocket", r4.parsed.take as string, 1);
-            this.msg.lastAction = `took:${r4.parsed.take}`;
+            this.tick.lastAction = `took:${r4.parsed.take}`;
           }
         }
       }
       if (r5.parsed.start_combat === true) {
-        this.msg.mode = "combat";
+        this.tick.mode = "combat";
         this.buildCombat();
         this.events = [];
-        this.msg.lastAction = "combat-started";
+        this.tick.lastAction = "combat-started";
       }
-    } else if (this.msg.mode === "combat") {
-      if (typeof r6.parsed.action === "string" && r6.parsed.action) {
-        this.pcChoice = r6.parsed.action as "swing" | "hack";
-      }
-      for (const c of this.combatants) c.resources!.ap = c.id === "pc" ? 3 : 2;
-      for (const c of this.combatants) c.effects?.tick(now);
-      this.events = runRound(this.combatants, this.chooseFor, { combatants: this.combatants }, now, this.rng.mechanical);
-      const pc = this.combatants.find((c) => c.id === "pc")!;
-      const scav = this.combatants.find((c) => c.id === "scav")!;
-      if (pc.hp <= 0) { this.msg.ended = "pc-down"; this.msg.mode = "ended"; }
-      else if (scav.hp <= 0) { this.msg.ended = "enemy-down"; this.msg.mode = "ended"; }
+    } else if (this.tick.mode === "combat") {
+      if (typeof r6.parsed.action === "string" && r6.parsed.action) this.pcChoice = r6.parsed.action as "swing" | "hack";
+      const cs = this.combatantsHolder.cs;
+      for (const c of cs) if (c.resources) c.resources.ap = c.id === "pc" ? 3 : 2;
+      for (const c of cs) c.effects?.tick(now);
+      this.events = runRound(cs, this.chooseFor, { combatants: cs }, now, this.rng.mechanical);
+      const pc = cs.find((c) => c.id === "pc")!;
+      const scav = cs.find((c) => c.id === "scav")!;
+      if (pc.hp <= 0) { this.combatantsHolder.ended = "pc-down"; this.tick.mode = "ended"; }
+      else if (scav.hp <= 0) { this.combatantsHolder.ended = "enemy-down"; this.tick.mode = "ended"; }
     }
-    return {
-      messageState: this.msg,
-      modifiedMessage: text !== botMessage.content ? text : null,
-      systemMessage: this.msg.ended ? `[combat ends: ${this.msg.ended}]` : null,
-    };
+    const stripped = text !== botMessage.content ? text : null;
+    const sys = this.combatantsHolder.ended ? `[combat ends: ${this.combatantsHolder.ended}]` : null;
+    return mergeResponses({ modifiedMessage: stripped, systemMessage: sys }, await this.bound.afterResponse(botMessage));
+  }
+
+  // Manual slot UI handlers. saveSlot/loadSlot persist via each shard's
+  // own backend with a "__slot__manual__<shardName>" key — independent of
+  // the per-message tree.
+  saveSlot = async () => {
+    await this.store.saveSlot("manual");
+    this.slotMsg = `saved @ tick ${this.tick.n}`;
+    this.forceRerender();
+  };
+  loadSlot = async () => {
+    await this.store.loadSlot("manual");
+    this.slotMsg = `loaded`;
+    this.forceRerender();
+  };
+  private rerender = 0;
+  private forceRerender(): void {
+    // Trigger React update by mutating a counter the render reads.
+    this.rerender += 1;
+    // The render method runs on each re-render the host triggers; this
+    // is a best-effort nudge for the dev TestRunner.
   }
 
   render(): ReactElement {
+    const _ = this.rerender;
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Maven&apos;s clinic — {this.msg.mode} — tick {this.msg.ticks}</h3>
+        <h3 style={{ marginTop: 0 }}>Maven&apos;s clinic — {this.tick.mode} — tick {this.tick.n}</h3>
+        <div style={{ marginBottom: 8 }}>
+          <button onClick={this.saveSlot} style={{ marginRight: 8 }}>Save Slot</button>
+          <button onClick={this.loadSlot}>Load Slot</button>
+          {this.slotMsg && <span style={{ marginLeft: 12, opacity: 0.7 }}>{this.slotMsg}</span>}
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <div>
             <h4>Body</h4>
@@ -325,12 +399,12 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
             </tbody></table>
             <h4>Equipped</h4>
             <ul>{[...this.loadout.getAllEquipped()].map(([slot, inst]) => (
-              <li key={slot}>{inst.def.id} on {slot} — {this.loadout.fit(slot, this.msg.ticks)?.fit}</li>
+              <li key={slot}>{inst.def.id} on {slot} — {this.loadout.fit(slot, this.tick.n)?.fit}</li>
             ))}</ul>
-            <div style={{ fontSize: "0.85rem", opacity: 0.7 }}>last: {this.msg.lastAction ?? "—"}</div>
+            <div style={{ fontSize: "0.85rem", opacity: 0.7 }}>last: {this.tick.lastAction ?? "—"}</div>
           </div>
           <div>
-            {this.msg.mode === "shop" ? (
+            {this.tick.mode === "shop" ? (
               <>
                 <h4>Inventory</h4>
                 {this.inv.spots().map((s) => (
@@ -341,12 +415,12 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
               <>
                 <h4>Combat</h4>
                 <table><tbody>
-                  {this.combatants.map((c) => (
+                  {this.combatantsHolder.cs.map((c) => (
                     <tr key={c.id}><td style={{ color: "#9ad" }}>{c.id}</td><td>HP {c.hp}</td><td>AP {c.resources?.ap}</td><td>{c.effects?.active().map((i) => i.id).join(",") || "—"}</td></tr>
                   ))}
                 </tbody></table>
                 <pre style={{ background: "#000", padding: 6, maxHeight: 160, overflow: "auto" }}>{this.events.map((e) => JSON.stringify(e)).join("\n") || "—"}</pre>
-                {this.msg.ended && <h4 style={{ color: "#e88" }}>End: {this.msg.ended}</h4>}
+                {this.combatantsHolder.ended && <h4 style={{ color: "#e88" }}>End: {this.combatantsHolder.ended}</h4>}
               </>
             )}
           </div>
