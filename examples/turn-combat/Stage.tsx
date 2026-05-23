@@ -6,9 +6,17 @@
  * runs one round (initiative-ordered, damage pipeline, effects). Events
  * surface to the LLM through observation, not prose.
  *
- * Primitives: action, combat-turn, effects, stats, rng, tag-parser.
+ * Primitives: action, combat-turn, effects, rng, tag-parser, persistence.
  * Philosophy: rule #3 (events are data; LLM renders), rule #7 (mechanical
  * RNG stream separate from any cosmetic noise).
+ *
+ * Persistence: per the plan —
+ *   - `turn` (round counter, queued choice): messageState + chubTreeHistory
+ *   - `combatants` (persistent HP/effects): chatState + forbidBranching.
+ *     A swipe re-narrates a round but does NOT un-damage anyone; the
+ *     duellist is a persistent person. This is a deliberate game-design
+ *     stance — pair with messageState-tree mechanics where roll outcomes
+ *     should explore alternates.
  */
 
 import { ReactElement } from "react";
@@ -21,28 +29,26 @@ import { Rng } from "../../src/lib/rng";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import {
+  PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
+  bindStore, mergeResponses, shard,
+} from "../../src/lib/persistence";
 
-interface MessageStateType {
-  round: number;
-  pcHp: number;
-  enemyHp: number;
-  ended?: "pc-down" | "enemy-down";
-  pcEffects?: { instances: { id: string; startTime: number; count: number }[] };
-  enemyEffects?: { instances: { id: string; startTime: number; count: number }[] };
-}
-type ChatStateType = null;
+interface MessageStateType { round: number; choice?: string; [k: string]: unknown }
+interface ChatStateType { [k: string]: unknown }
 type InitStateType = null;
 type ConfigType = null;
 
 const GUARD_EFFECT: EffectDef = {
   id: "guarded", duration: 1, stacking: "replace",
-  targets: { stats: ["armor"] },
-  baseMagnitudes: { stats: { armor: 3 } },
+  targets: { stats: ["armor"] }, baseMagnitudes: { stats: { armor: 3 } },
 };
 const SUNDER_EFFECT: EffectDef = {
   id: "sundered", duration: 2, stacking: "replace",
-  targets: { stats: ["armor"] },
-  baseMagnitudes: { stats: { armor: -2 } },
+  targets: { stats: ["armor"] }, baseMagnitudes: { stats: { armor: -2 } },
+};
+const EFFECT_DEFS: Record<string, EffectDef> = {
+  [GUARD_EFFECT.id]: GUARD_EFFECT, [SUNDER_EFFECT.id]: SUNDER_EFFECT,
 };
 
 const SWING: ActionDef<Combatant, Combatant, World> = {
@@ -57,62 +63,107 @@ const SUNDER: ActionDef<Combatant, Combatant, World> = {
   id: "sunder", costs: { ap: 2 }, range: 1, cooldown: 2, effects: [SUNDER_EFFECT],
   targetFilter: (a, t) => t.hp > 0 && t.id !== a.id,
 };
-
 const ATTACK: AttackProfile = { damage: 6, type: "slash", crit: 0.1, accuracy: 0.85 };
 const SUNDER_PROFILE: AttackProfile = { damage: 3, type: "blunt", crit: 0, accuracy: 0.9 };
+
+// Serializable form of a combatant for the persistence layer.
+interface CombatantSnap {
+  id: string;
+  hp: number;
+  ap: number;
+  effects: ReturnType<EffectStore["toJSON"]>;
+}
+interface CombatantsSnap { items: CombatantSnap[]; ended?: "pc-down" | "enemy-down" }
+
+function buildCombatants(): Combatant[] {
+  return [
+    { id: "pc", initiative: 12, hp: 30, resources: { ap: 3 },
+      position: { x: 0, y: 0 }, stats: { dodge: 0.15, armor: 1, critResist: 0.05 },
+      effects: new EffectStore() },
+    { id: "duellist", initiative: 10, hp: 22, resources: { ap: 2 },
+      position: { x: 1, y: 0 }, stats: { dodge: 0.1, armor: 2 },
+      effects: new EffectStore() },
+  ];
+}
+
+function snapCombatants(cs: Combatant[], ended?: "pc-down" | "enemy-down"): CombatantsSnap {
+  return {
+    items: cs.map((c) => ({
+      id: c.id, hp: c.hp, ap: c.resources?.ap ?? 0,
+      effects: c.effects?.toJSON() ?? { instances: [] },
+    })),
+    ended,
+  };
+}
+
+function restoreCombatants(holder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" }, data: CombatantsSnap): void {
+  for (const snap of data.items) {
+    const c = holder.cs.find((x) => x.id === snap.id);
+    if (!c) continue;
+    c.hp = snap.hp;
+    if (c.resources) c.resources.ap = snap.ap;
+    c.effects = EffectStore.fromJSON(snap.effects, EFFECT_DEFS);
+  }
+  holder.ended = data.ended;
+}
 
 export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   rng = Rng.fromSeed("temple-steps");
   combatants: Combatant[];
-  msg: MessageStateType = { round: 0, pcHp: 30, enemyHp: 22 };
+  combatantsHolder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" };
+  turn = { n: 0, choice: "swing" as "swing" | "guard" | "sunder" };
   events: CombatEvent[] = [];
   habituation = new Map<string, number>();
-  pcChoice: "swing" | "guard" | "sunder" = "swing";
+  layers = createChubLayers();
+  store!: PersistenceStore;
+  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    if (data.messageState) this.msg = { ...this.msg, ...data.messageState };
-    this.combatants = [
-      { id: "pc", initiative: 12, hp: this.msg.pcHp, resources: { ap: 3 },
-        position: { x: 0, y: 0 }, stats: { dodge: 0.15, armor: 1, critResist: 0.05 },
-        effects: new EffectStore() },
-      { id: "duellist", initiative: 10, hp: this.msg.enemyHp, resources: { ap: 2 },
-        position: { x: 1, y: 0 }, stats: { dodge: 0.1, armor: 2 },
-        effects: new EffectStore() },
-    ];
+    this.combatants = buildCombatants();
+    this.combatantsHolder = { cs: this.combatants };
+    this.layers = createChubLayers({
+      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
+      chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
+    });
+    this.store = new PersistenceStore({
+      turn: shard("turn", this.turn,
+        (i) => ({ n: i.n, choice: i.choice }),
+        (d: { n: number; choice: "swing" | "guard" | "sunder" }) => ({ n: d.n, choice: d.choice }),
+        this.layers.messageStateBackend, chubTreeHistory()),
+      combatants: shard("combatants", this.combatantsHolder,
+        (i) => snapCombatants(i.cs, i.ended),
+        (d: CombatantsSnap) => {
+          const holder = { cs: this.combatants, ended: undefined as "pc-down" | "enemy-down" | undefined };
+          restoreCombatants(holder, d);
+          return holder;
+        },
+        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+    });
+    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
   }
 
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    return { success: true, error: null, initState: null, chatState: null };
+    await this.store.load();
+    const { chatState, messageState } = await this.bound.initial();
+    return { success: true, error: null, initState: null, chatState, messageState };
   }
+
   async setState(state: MessageStateType): Promise<void> {
-    if (!state) return;
-    this.msg = { ...this.msg, ...state };
-    // Rebuild combatants from serialized state so swipes restore real HP/effects.
-    const EFFECT_DEFS: Record<string, typeof GUARD_EFFECT> = {
-      [GUARD_EFFECT.id]: GUARD_EFFECT,
-      [SUNDER_EFFECT.id]: SUNDER_EFFECT,
-    };
-    const pc = this.combatants.find((c) => c.id === "pc")!;
-    const enemy = this.combatants.find((c) => c.id === "duellist")!;
-    pc.hp = state.pcHp ?? pc.hp;
-    enemy.hp = state.enemyHp ?? enemy.hp;
-    if (state.pcEffects) pc.effects = EffectStore.fromJSON(state.pcEffects, EFFECT_DEFS);
-    if (state.enemyEffects) enemy.effects = EffectStore.fromJSON(state.enemyEffects, EFFECT_DEFS);
+    await this.bound.setState(state);
   }
 
   private chooseFor = (actor: Combatant, world: World) => {
     if (actor.id === "pc") {
-      const choice = this.pcChoice;
+      const choice = this.turn.choice;
       const target = world.combatants.find((c) => c.id === "duellist")!;
       if (choice === "guard") return { action: GUARD, target: actor };
       if (choice === "sunder") return { action: SUNDER, target, profile: SUNDER_PROFILE };
       return { action: SWING, target, profile: ATTACK };
     }
-    // Enemy AI: alternate swing/sunder; guard if HP < 30%
     const target = world.combatants.find((c) => c.id === "pc")!;
     if (actor.hp < 7) return { action: GUARD, target: actor };
-    if (this.msg.round % 3 === 0) return { action: SUNDER, target, profile: SUNDER_PROFILE };
+    if (this.turn.n % 3 === 0) return { action: SUNDER, target, profile: SUNDER_PROFILE };
     return { action: SWING, target, profile: ATTACK };
   };
 
@@ -123,25 +174,16 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
       effects: c.effects?.active().map((i) => i.id) ?? [],
     });
     return [
-      {
-        id: "combat-state",
-        channels: ["visual"],
-        salience: () => 1,
-        habituationTau: 0,
-        properties: { visual: { combatants: () => this.combatants.map(summary) } },
-      },
-      {
-        id: "last-round-events",
-        channels: ["auditory"],
-        salience: () => Math.min(1, this.events.length / 8),
-        habituationTau: 1,
-        properties: { auditory: { events: () => this.events.slice(-20) } },
-      },
+      { id: "combat-state", channels: ["visual"], salience: () => 1, habituationTau: 0,
+        properties: { visual: { combatants: () => this.combatants.map(summary) } } },
+      { id: "last-round-events", channels: ["auditory"],
+        salience: () => Math.min(1, this.events.length / 8), habituationTau: 1,
+        properties: { auditory: { events: () => this.events.slice(-20) } } },
     ];
   }
 
-  async beforePrompt(_userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = this.msg.round;
+  async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    const now = this.turn.n;
     const observed = assembleObservations(this.observationSources(now), { now }, { now, maxCount: 3 });
     const stageDirections = emitStageDirections({
       observations: observed,
@@ -153,11 +195,7 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
         "your reply. The previous round's events are in the auditory observation — render them, " +
         "do not invent damage numbers.",
     });
-    const pc = this.combatants.find((c) => c.id === "pc")!;
-    const enemy = this.combatants.find((c) => c.id === "duellist")!;
-    this.msg.pcEffects = pc.effects?.toJSON();
-    this.msg.enemyEffects = enemy.effects?.toJSON();
-    return { stageDirections, messageState: this.msg };
+    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
   }
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
@@ -165,33 +203,28 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
       action: { kind: "string", enum: ["swing", "guard", "sunder"], default: "swing" },
     });
     const choice = (typeof r.parsed.action === "string" ? r.parsed.action : "swing") as "swing" | "guard" | "sunder";
-    this.pcChoice = choice;
-    if (this.msg.ended) {
-      return { messageState: this.msg, modifiedMessage: r.stripped, stageDirections: null, systemMessage: null, error: null, chatState: null };
+    this.turn.choice = choice;
+    if (this.combatantsHolder.ended) {
+      const stripped = r.stripped !== botMessage.content ? r.stripped : null;
+      return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
     }
-    this.msg.round += 1;
-    // Replenish AP each round
-    for (const c of this.combatants) c.resources!.ap = c.id === "pc" ? 3 : 2;
-    // Tick effects
-    for (const c of this.combatants) c.effects?.tick(this.msg.round);
-    this.events = runRound(this.combatants, this.chooseFor, { combatants: this.combatants }, this.msg.round, this.rng.mechanical);
+    this.turn.n += 1;
+    for (const c of this.combatants) if (c.resources) c.resources.ap = c.id === "pc" ? 3 : 2;
+    for (const c of this.combatants) c.effects?.tick(this.turn.n);
+    this.events = runRound(this.combatants, this.chooseFor, { combatants: this.combatants }, this.turn.n, this.rng.mechanical);
     const pc = this.combatants.find((c) => c.id === "pc")!;
     const en = this.combatants.find((c) => c.id === "duellist")!;
-    this.msg.pcHp = pc.hp; this.msg.enemyHp = en.hp;
-    if (pc.hp <= 0) this.msg.ended = "pc-down";
-    else if (en.hp <= 0) this.msg.ended = "enemy-down";
-    return {
-      messageState: this.msg,
-      modifiedMessage: r.stripped !== botMessage.content ? r.stripped : null,
-      systemMessage: this.msg.ended ? `[combat ends: ${this.msg.ended}]` : null,
-      error: null, chatState: null, stageDirections: null,
-    };
+    if (pc.hp <= 0) this.combatantsHolder.ended = "pc-down";
+    else if (en.hp <= 0) this.combatantsHolder.ended = "enemy-down";
+    const stripped = r.stripped !== botMessage.content ? r.stripped : null;
+    const sys = this.combatantsHolder.ended ? `[combat ends: ${this.combatantsHolder.ended}]` : null;
+    return mergeResponses({ modifiedMessage: stripped, systemMessage: sys }, await this.bound.afterResponse(botMessage));
   }
 
   render(): ReactElement {
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Duel — round {this.msg.round} (you queued: {this.pcChoice})</h3>
+        <h3 style={{ marginTop: 0 }}>Duel — round {this.turn.n} (you queued: {this.turn.choice})</h3>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead><tr><th align="left">combatant</th><th>HP</th><th>AP</th><th>armor</th><th align="left">effects</th></tr></thead>
           <tbody>
@@ -200,7 +233,7 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
                 <td style={{ padding: "4px 8px" }}>{c.id}</td>
                 <td align="center">{c.hp}</td>
                 <td align="center">{c.resources?.ap ?? 0}</td>
-                <td align="center">{(c.stats?.armor ?? 0) + (c.effects?.totalMagnitudes(this.msg.round).stats?.armor ?? 0)}</td>
+                <td align="center">{(c.stats?.armor ?? 0) + (c.effects?.totalMagnitudes(this.turn.n).stats?.armor ?? 0)}</td>
                 <td>{c.effects?.active().map((i) => i.id).join(", ") || "—"}</td>
               </tr>
             ))}
@@ -210,7 +243,7 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
         <pre style={{ background: "#000", padding: 8, maxHeight: 220, overflow: "auto" }}>
 {this.events.map((e) => JSON.stringify(e)).join("\n") || "—"}
         </pre>
-        {this.msg.ended && <h3 style={{ color: "#e88" }}>Combat ended: {this.msg.ended}</h3>}
+        {this.combatantsHolder.ended && <h3 style={{ color: "#e88" }}>Combat ended: {this.combatantsHolder.ended}</h3>}
       </div>
     );
   }

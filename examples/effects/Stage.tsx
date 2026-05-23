@@ -6,9 +6,12 @@
  * with the right stacking policy and trajectory. `tick` per turn drains
  * expired effects.
  *
- * Primitives: effects, stats, scheduler, tag-parser, chub-adapters.
+ * Primitives: effects, scheduler, tag-parser, chub-adapters, persistence.
  * Philosophy: rule #3 (effects.tick returns the expired set; the stage
  * decides what to do with it), rule #6 (elapsed = now - startTime).
+ *
+ * Persistence: store shard on messageState + chubTreeHistory — effects
+ * are per-branch so a swipe really does explore an alternate brew.
  */
 
 import { ReactElement } from "react";
@@ -19,12 +22,11 @@ import { Scheduler } from "../../src/lib/scheduler";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import {
+  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shard,
+} from "../../src/lib/persistence";
 
-interface MessageStateType {
-  ticks: number;
-  pcTag?: string;
-  effects?: { instances: { id: string; startTime: number; count: number }[] };
-}
+interface MessageStateType { ticks: number; [k: string]: unknown }
 type ChatStateType = null;
 type InitStateType = null;
 type ConfigType = null;
@@ -58,66 +60,62 @@ const TINCTURES: Record<string, EffectDef> = {
 export class EffectsStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   store = new EffectStore();
   scheduler = new Scheduler<{ store: EffectStore }>({ store: this.store });
-  msg: MessageStateType = { ticks: 0 };
+  tick = { n: 0 };
   events: string[] = [];
+  layers = createChubLayers();
+  pStore!: PersistenceStore;
+  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    if (data.messageState) this.msg = { ...this.msg, ...data.messageState };
+    this.layers = createChubLayers({
+      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
+    });
+    this.pStore = new PersistenceStore({
+      tick: shard("tick", this.tick, (i) => i.n, (d: number) => ({ n: d }), this.layers.messageStateBackend, chubTreeHistory()),
+      effects: shard("effects", this.store, (i) => i.toJSON(), (d: ReturnType<EffectStore["toJSON"]>) => EffectStore.fromJSON(d, TINCTURES), this.layers.messageStateBackend, chubTreeHistory()),
+    });
+    this.bound = bindStore<ChatStateType, MessageStateType>(this.pStore, { layers: this.layers });
   }
 
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    return { success: true, error: null, initState: null, chatState: null };
+    await this.pStore.load();
+    const { chatState, messageState } = await this.bound.initial();
+    return { success: true, error: null, initState: null, chatState, messageState };
   }
 
   async setState(state: MessageStateType): Promise<void> {
-    if (!state) return;
-    this.msg = { ...this.msg, ...state };
-    // Restore effect store so swipes return to actual effect state.
-    if (state.effects) this.store = EffectStore.fromJSON(state.effects, TINCTURES);
+    await this.bound.setState(state);
   }
 
   private observationSources(now: number): ObservationSource<{ now: number }>[] {
     return [
       {
-        id: "active-effects",
-        channels: ["interoceptive"],
-        salience: () => Math.min(1, this.store.active().length / 3),
-        habituationTau: 3,
-        properties: {
-          interoceptive: {
-            active: () => this.store.active().map((i) => {
-              const m: EffectMagnitudes = this.store.magnitudesFor(i.id, now) ?? {};
-              return {
-                id: i.id,
-                remaining: i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : null,
-                stacks: i.count,
-                stats: m.stats ?? {},
-                tags: m.tagsAdd ?? [],
-              };
-            }),
-          },
-        },
+        id: "active-effects", channels: ["interoceptive"],
+        salience: () => Math.min(1, this.store.active().length / 3), habituationTau: 3,
+        properties: { interoceptive: {
+          active: () => this.store.active().map((i) => {
+            const m: EffectMagnitudes = this.store.magnitudesFor(i.id, now) ?? {};
+            return {
+              id: i.id,
+              remaining: i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : null,
+              stacks: i.count, stats: m.stats ?? {}, tags: m.tagsAdd ?? [],
+            };
+          }),
+        } },
       },
       {
-        id: "tincture-menu",
-        channels: ["visual"],
-        salience: () => 0.3,
-        habituationTau: 20,
-        properties: {
-          visual: {
-            available: () => Object.entries(TINCTURES).map(([id, def]) => ({
-              id, stacking: def.stacking, duration: def.duration,
-            })),
-          },
-        },
+        id: "tincture-menu", channels: ["visual"], salience: () => 0.3, habituationTau: 20,
+        properties: { visual: {
+          available: () => Object.entries(TINCTURES).map(([id, def]) => ({ id, stacking: def.stacking, duration: def.duration })),
+        } },
       },
     ];
   }
 
-  async beforePrompt(_userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = ++this.msg.ticks;
-    // Drain expired
+  async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    this.tick.n += 1;
+    const now = this.tick.n;
     const expired = this.store.tick(now);
     for (const e of expired) this.events.push(`expired:${e.id}@${now}`);
 
@@ -132,12 +130,11 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
         "from what the user sees). Available tincture ids and their stacking are in the " +
         "visual observation.",
     });
-    this.msg.effects = this.store.toJSON();
-    return { stageDirections, messageState: this.msg };
+    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
   }
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = this.msg.ticks;
+    const now = this.tick.n;
     const r1 = parseTags<Record<string, unknown>>(botMessage.content, { apply: { kind: "string" } });
     const r2 = parseTags<Record<string, unknown>>(r1.stripped, { dispel: { kind: "string" } });
     const applyId = typeof r1.parsed.apply === "string" ? (r1.parsed.apply as string).trim() : "";
@@ -150,15 +147,12 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
       const dispelled = this.store.dispelByTag(dispelTag);
       for (const d of dispelled) this.events.push(`dispelled:${d.id}@${now}`);
     }
-    return {
-      messageState: this.msg,
-      modifiedMessage: r2.stripped !== botMessage.content ? r2.stripped : null,
-      systemMessage: null, error: null, chatState: null, stageDirections: null,
-    };
+    const stripped = r2.stripped !== botMessage.content ? r2.stripped : null;
+    return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
   }
 
   render(): ReactElement {
-    const now = this.msg.ticks;
+    const now = this.tick.n;
     const active = this.store.active();
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>

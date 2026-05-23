@@ -6,27 +6,34 @@
  * snapshots let the player undo to a prior body-state. Surfaces the full
  * effective tag map to the LLM as an observation.
  *
- * Primitives: body, transformation, tags, snapshots, scheduler, observation.
+ * Primitives: body, transformation, snapshots, persistence.
  * Philosophy: rule #4 (effective tags recomputed each read), rule #6
  * (trajectories are functions of elapsed, not counters).
+ *
+ * Persistence: body shard on chatState + forbidBranching. The body is
+ * canon — swiping does NOT un-transform you. To undo, the player names a
+ * snapshot via `<restore>baseline</restore>`, which is a deliberate
+ * in-fiction act.
  */
 
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { Body, TransformationInstance } from "../../src/lib/body";
+import { Body } from "../../src/lib/body";
 import { TransformationDef, apply, applyTrajectories, getConflicts } from "../../src/lib/transformation";
-import { Snapshots, SnapshotData } from "../../src/lib/snapshots";
+import { Snapshots } from "../../src/lib/snapshots";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import {
+  PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
+  bindStore, mergeResponses, shard,
+} from "../../src/lib/persistence";
 
-interface MessageStateType {
-  ticks: number; lastApplied?: string;
-  body?: { baseSlots: Record<string, string[]>; transformations: TransformationInstance[] };
-  snaps?: { snaps: Record<string, SnapshotData> };
-}
-type ChatStateType = null; type InitStateType = null; type ConfigType = null;
+interface MessageStateType { ticks: number; lastApplied?: string; [k: string]: unknown }
+interface ChatStateType { [k: string]: unknown }
+type InitStateType = null;
+type ConfigType = null;
 
 const TFS: Record<string, TransformationDef> = {
   cat_tail: {
@@ -51,8 +58,7 @@ const TFS: Record<string, TransformationDef> = {
   fur_torso: {
     id: "fur_torso", slot: "torso",
     addTags: ["furred"], removeTags: ["skin-soft"],
-    baseDuration: 5,
-    conflicts: {},
+    baseDuration: 5, conflicts: {},
     displayName: "torso pelt tincture",
   },
 };
@@ -60,8 +66,11 @@ const TFS: Record<string, TransformationDef> = {
 export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   body: Body;
   snaps: Snapshots;
-  msg: MessageStateType = { ticks: 0 };
+  tick = { n: 0, lastApplied: undefined as string | undefined };
   applied: { id: string; at: number }[] = [];
+  layers = createChubLayers();
+  store!: PersistenceStore;
+  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
@@ -74,21 +83,36 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
     });
     this.snaps = new Snapshots(this.body);
     this.snaps.save("baseline");
-    if (data.messageState) this.msg = { ...this.msg, ...data.messageState };
+
+    this.layers = createChubLayers({
+      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
+      chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
+    });
+    this.store = new PersistenceStore({
+      tick: shard("tick", this.tick,
+        (i) => ({ n: i.n, lastApplied: i.lastApplied }),
+        (d: { n: number; lastApplied?: string }) => ({ n: d.n, lastApplied: d.lastApplied }),
+        this.layers.messageStateBackend, chubTreeHistory()),
+      body: shard("body", this.body,
+        (i) => i.toJSON(),
+        (d: ReturnType<Body["toJSON"]>) => Body.fromJSON(d),
+        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      snaps: shard("snaps", this.snaps,
+        (i) => i.toJSON(),
+        (d: ReturnType<Snapshots["toJSON"]>) => Snapshots.fromJSON(d, this.body),
+        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+    });
+    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
   }
 
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    return { success: true, error: null, initState: null, chatState: null };
+    await this.store.load();
+    const { chatState, messageState } = await this.bound.initial();
+    return { success: true, error: null, initState: null, chatState, messageState };
   }
+
   async setState(state: MessageStateType): Promise<void> {
-    if (!state) return;
-    this.msg = { ...this.msg, ...state };
-    // Restore body + snapshots from serialized state for swipe-safety.
-    if (state.body) {
-      this.body = Body.fromJSON(state.body);
-      this.snaps = new Snapshots(this.body);
-      if (state.snaps) this.snaps = Snapshots.fromJSON(state.snaps, this.body);
-    }
+    await this.bound.setState(state);
   }
 
   private tryApply(id: string, now: number): { ok: boolean; reason?: string } {
@@ -107,31 +131,26 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
   private observationSources(now: number): ObservationSource<{ now: number }>[] {
     return [
       {
-        id: "body-state",
-        channels: ["interoceptive"],
+        id: "body-state", channels: ["interoceptive"],
         salience: () => Math.min(1, this.body.getTransformations().length / 3 + 0.3),
         habituationTau: 4,
-        properties: {
-          interoceptive: {
-            slots: () => {
-              const out: Record<string, string[]> = {};
-              for (const [slot, tags] of this.body.getAllEffectiveTags()) out[slot] = tags.toArray();
-              return out;
-            },
-            in_progress: () => this.body.getTransformations().map((tf) => ({
-              id: tf.id, slot: tf.slot,
-              elapsed: now - tf.startTime,
-              duration: tf.duration,
-              current_tags: tf.addTags,
-            })),
+        properties: { interoceptive: {
+          slots: () => {
+            const out: Record<string, string[]> = {};
+            for (const [slot, tags] of this.body.getAllEffectiveTags()) out[slot] = tags.toArray();
+            return out;
           },
-        },
+          in_progress: () => this.body.getTransformations().map((tf) => ({
+            id: tf.id, slot: tf.slot, elapsed: now - tf.startTime, duration: tf.duration, current_tags: tf.addTags,
+          })),
+        } },
       },
     ];
   }
 
-  async beforePrompt(_userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = ++this.msg.ticks;
+  async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    this.tick.n += 1;
+    const now = this.tick.n;
     applyTrajectories(this.body, now);
     this.body.tick(now);
     const observed = assembleObservations(this.observationSources(now), { now }, { now, maxCount: 2 });
@@ -145,30 +164,27 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
         "emit `<restore>baseline</restore>`. The in_progress array shows partially-developed " +
         "TFs — render them as the gradual change they are.",
     });
-    this.msg.body = this.body.toJSON();
-    this.msg.snaps = this.snaps.toJSON();
-    return { stageDirections, messageState: this.msg };
+    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
   }
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = this.msg.ticks;
-    const r1 = parseTags<Record<string, unknown>>(botMessage.content, {
-      drink: { kind: "string", enum: Object.keys(TFS) },
-    });
+    const now = this.tick.n;
+    const r1 = parseTags<Record<string, unknown>>(botMessage.content, { drink: { kind: "string", enum: Object.keys(TFS) } });
     const r2 = parseTags<Record<string, unknown>>(r1.stripped, { restore: { kind: "string" } });
     if (typeof r1.parsed.drink === "string" && r1.parsed.drink) {
       const res = this.tryApply(r1.parsed.drink as string, now);
-      if (res.ok) this.msg.lastApplied = r1.parsed.drink as string;
+      if (res.ok) this.tick.lastApplied = r1.parsed.drink as string;
     }
     if (typeof r2.parsed.restore === "string" && r2.parsed.restore) {
       this.snaps.restore(r2.parsed.restore as string);
       this.applied = [];
     }
-    return { messageState: this.msg, modifiedMessage: r2.stripped !== botMessage.content ? r2.stripped : null };
+    const stripped = r2.stripped !== botMessage.content ? r2.stripped : null;
+    return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
   }
 
   render(): ReactElement {
-    const now = this.msg.ticks;
+    const now = this.tick.n;
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
         <h3 style={{ marginTop: 0 }}>Body — tick {now}</h3>
@@ -187,7 +203,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
           ))}</ul>
         )}
         <div style={{ opacity: 0.7, fontSize: "0.85rem", marginTop: 8 }}>
-          last applied: {this.msg.lastApplied ?? "—"} · snapshots: {this.snaps.list().join(", ") || "—"}
+          last applied: {this.tick.lastApplied ?? "—"} · snapshots: {this.snaps.list().join(", ") || "—"}
         </div>
       </div>
     );

@@ -6,42 +6,41 @@
  * carry-class. When the player picks something up or the scene moves, the
  * carry-class decides what follows.
  *
- * Primitives: inventory, observation, chub-adapters, prose-register.
+ * Primitives: inventory, observation, chub-adapters, prose-register, persistence.
  * Philosophy: rule #2 (def/instance — items are ItemDefs, the stage holds
  * stacks), rule #4 (accessibility recomputed on read), rule #9 (the LLM
  * gets a JSON observation block; it writes the prose).
+ *
+ * Persistence: inv shard on messageState + chubTreeHistory — swiping the
+ * same prompt should let the user explore alternate item movements.
  */
 
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { Inventory, ItemDef, Stack, SpotMeta } from "../../src/lib/inventory";
+import { Inventory, Stack } from "../../src/lib/inventory";
 import { ObservationSource, assembleObservations } from "../../src/lib/observation";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
+import {
+  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shard,
+} from "../../src/lib/persistence";
 
-interface MessageStateType {
-  ticks: number;
-  lastTakenDefId?: string;
-  inv?: { defs: ItemDef[]; spots: Record<string, Stack[]>; meta: Record<string, SpotMeta> };
-}
+interface MessageStateType { ticks: number; [k: string]: unknown }
 type ChatStateType = null;
 type InitStateType = null;
 type ConfigType = null;
 
-interface PakState {
-  inv: Inventory;
-  now: number;
-}
-
 export class InventoryStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
-  state: PakState;
-  msg: MessageStateType = { ticks: 0 };
+  inv = new Inventory();
+  tick = { n: 0 };
   habituation = new Map<string, number>();
+  layers = createChubLayers();
+  store!: PersistenceStore;
+  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    const inv = new Inventory();
-    inv
+    this.inv
       .register({ id: "brass-compass", carryClass: "explicit", portable: true, counted: false, defaultSpot: "counter", displayName: "brass compass", description: "tarnished, with a sticky lid" })
       .register({ id: "ration-bar", carryClass: "habitual", portable: true, counted: true, defaultSpot: "under-counter", displayName: "ration bar" })
       .register({ id: "lantern", carryClass: "explicit", portable: true, counted: false, defaultSpot: "hanging-hook", displayName: "oil lantern" })
@@ -49,90 +48,78 @@ export class InventoryStage extends StageBase<InitStateType, ChatStateType, Mess
       .register({ id: "stove", carryClass: "fixed", portable: false, counted: false, displayName: "pot-bellied stove" })
       .register({ id: "moth-jar", carryClass: "explicit", portable: true, counted: true, defaultSpot: "back-room", displayName: "jar of luminous moths" });
 
-    inv.ensureSpot("counter", { disorder: 0.2 });
-    inv.ensureSpot("under-counter", { disorder: 0.5 });
-    inv.ensureSpot("hanging-hook");
-    inv.ensureSpot("back-room", { disorder: 0.8 });
-    inv.ensureSpot("pak-pocket");
+    this.inv.ensureSpot("counter", { disorder: 0.2 });
+    this.inv.ensureSpot("under-counter", { disorder: 0.5 });
+    this.inv.ensureSpot("hanging-hook");
+    this.inv.ensureSpot("back-room", { disorder: 0.8 });
+    this.inv.ensureSpot("pak-pocket");
 
-    inv.add("counter", "brass-compass");
-    inv.add("counter", "ledger");
-    inv.add("under-counter", "ration-bar", 4);
-    inv.add("hanging-hook", "lantern");
-    inv.add("back-room", "moth-jar", 3);
-    inv.add("back-room", "stove");
-    inv.add("pak-pocket", "ration-bar", 1);
+    this.inv.add("counter", "brass-compass");
+    this.inv.add("counter", "ledger");
+    this.inv.add("under-counter", "ration-bar", 4);
+    this.inv.add("hanging-hook", "lantern");
+    this.inv.add("back-room", "moth-jar", 3);
+    this.inv.add("back-room", "stove");
+    this.inv.add("pak-pocket", "ration-bar", 1);
 
-    this.state = { inv, now: 0 };
-    if (data.messageState) this.msg = { ...this.msg, ...data.messageState };
+    this.layers = createChubLayers({
+      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
+    });
+    this.store = new PersistenceStore({
+      tick: shard("tick", this.tick, (i) => i.n, (d: number) => ({ n: d }), this.layers.messageStateBackend, chubTreeHistory()),
+      inv: shard("inv", this.inv, (i) => i.toJSON(), (d: ReturnType<Inventory["toJSON"]>) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
+    });
+    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
   }
 
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    return { success: true, error: null, initState: null, chatState: null };
+    await this.store.load();
+    const { chatState, messageState } = await this.bound.initial();
+    return { success: true, error: null, initState: null, chatState, messageState };
   }
 
   async setState(state: MessageStateType): Promise<void> {
-    if (!state) return;
-    this.msg = { ...this.msg, ...state };
-    // Restore inventory from serialized snapshot so swipes don't lose state.
-    if (state.inv) this.state.inv = Inventory.fromJSON(state.inv);
-    if (state.ticks !== undefined) this.state.now = state.ticks;
+    await this.bound.setState(state);
   }
 
-  private sources(): ObservationSource<PakState>[] {
+  private sources(): ObservationSource<{ now: number }>[] {
+    const inv = this.inv;
+    const now = () => this.tick.n;
     return [
       {
-        id: "stall-contents",
-        channels: ["visual"],
-        salience: () => 0.6,
-        habituationTau: 4,
-        properties: {
-          visual: {
-            spots: (s) => {
-              const out: Record<string, { item: string; count: number; access: number }[]> = {};
-              for (const spot of s.inv.spots()) {
-                out[spot] = s.inv.contents(spot).map((st: Stack) => ({
-                  item: s.inv.getDef(st.defId)?.displayName ?? st.defId,
-                  count: st.count,
-                  access: Number(s.inv.accessibility(st.defId, spot, s.now).toFixed(2)),
-                }));
-              }
-              return out;
-            },
-          },
-        },
+        id: "stall-contents", channels: ["visual"], salience: () => 0.6, habituationTau: 4,
+        properties: { visual: { spots: () => {
+          const out: Record<string, { item: string; count: number; access: number }[]> = {};
+          for (const spot of inv.spots()) {
+            out[spot] = inv.contents(spot).map((st: Stack) => ({
+              item: inv.getDef(st.defId)?.displayName ?? st.defId,
+              count: st.count,
+              access: Number(inv.accessibility(st.defId, spot, now()).toFixed(2)),
+            }));
+          }
+          return out;
+        } } },
       },
       {
-        id: "stall-disorder",
-        channels: ["interoceptive"],
-        salience: (s) => {
-          let max = 0;
-          for (const spot of s.inv.spots()) max = Math.max(max, s.inv.meta(spot)?.disorder ?? 0);
-          return max;
-        },
+        id: "stall-disorder", channels: ["interoceptive"],
+        salience: () => { let m = 0; for (const s of inv.spots()) m = Math.max(m, inv.meta(s)?.disorder ?? 0); return m; },
         habituationTau: 10,
-        properties: {
-          interoceptive: {
-            messiest: (s) => {
-              let worst = "—"; let score = 0;
-              for (const spot of s.inv.spots()) {
-                const d = s.inv.meta(spot)?.disorder ?? 0;
-                if (d > score) { score = d; worst = spot; }
-              }
-              return { spot: worst, disorder: Number(score.toFixed(2)) };
-            },
-          },
-        },
+        properties: { interoceptive: { messiest: () => {
+          let worst = "—"; let score = 0;
+          for (const spot of inv.spots()) {
+            const d = inv.meta(spot)?.disorder ?? 0;
+            if (d > score) { score = d; worst = spot; }
+          }
+          return { spot: worst, disorder: Number(score.toFixed(2)) };
+        } } },
       },
     ];
   }
 
-  async beforePrompt(_userMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    this.state.now = ++this.msg.ticks;
-    const observed = assembleObservations(this.sources(), this.state, {
-      now: this.state.now,
-      maxCount: 3,
-      lastEmittedAt: this.habituation,
+  async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    this.tick.n += 1;
+    const observed = assembleObservations(this.sources(), { now: this.tick.n }, {
+      now: this.tick.n, maxCount: 3, lastEmittedAt: this.habituation,
     });
     const stageDirections = emitStageDirections({
       observations: observed,
@@ -140,35 +127,34 @@ export class InventoryStage extends StageBase<InitStateType, ChatStateType, Mess
       register: { pov: "close-second", tense: "present", distance: "close" },
       prefix: "Pak is the POV-adjacent shopkeeper. The block below is ground truth; do not name spot ids verbatim — translate them into prose.",
     });
-    this.msg.inv = this.state.inv.toJSON();
-    return { stageDirections, messageState: this.msg, modifiedMessage: null, systemMessage: null, error: null, chatState: null };
+    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
   }
 
-  async afterResponse(_botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    return { messageState: this.msg, modifiedMessage: null, systemMessage: null, error: null, chatState: null, stageDirections: null };
+  async afterResponse(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    return mergeResponses({}, await this.bound.afterResponse(msg));
   }
 
   render(): ReactElement {
     const rows: { spot: string; items: { name: string; count: number; access: number }[] }[] = [];
-    for (const spot of this.state.inv.spots()) {
+    for (const spot of this.inv.spots()) {
       rows.push({
         spot,
-        items: this.state.inv.contents(spot).map((st) => ({
-          name: this.state.inv.getDef(st.defId)?.displayName ?? st.defId,
+        items: this.inv.contents(spot).map((st) => ({
+          name: this.inv.getDef(st.defId)?.displayName ?? st.defId,
           count: st.count,
-          access: Number(this.state.inv.accessibility(st.defId, spot, this.state.now).toFixed(2)),
+          access: Number(this.inv.accessibility(st.defId, spot, this.tick.n).toFixed(2)),
         })),
       });
     }
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Pak&apos;s stall — tick {this.state.now}</h3>
+        <h3 style={{ marginTop: 0 }}>Pak&apos;s stall — tick {this.tick.n}</h3>
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead><tr><th align="left">spot</th><th align="left">contents</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.spot} style={{ borderTop: "1px solid #333" }}>
-                <td style={{ padding: "4px 8px", verticalAlign: "top" }}>{r.spot} <span style={{ opacity: 0.5 }}>(d={(this.state.inv.meta(r.spot)?.disorder ?? 0).toFixed(2)})</span></td>
+                <td style={{ padding: "4px 8px", verticalAlign: "top" }}>{r.spot} <span style={{ opacity: 0.5 }}>(d={(this.inv.meta(r.spot)?.disorder ?? 0).toFixed(2)})</span></td>
                 <td style={{ padding: "4px 8px" }}>
                   {r.items.length === 0 ? <em style={{ opacity: 0.5 }}>empty</em> :
                     r.items.map((it) => (
