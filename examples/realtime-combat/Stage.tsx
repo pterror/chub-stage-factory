@@ -43,13 +43,10 @@ const BULLET: AttackDef = {
 const ARENA = { w: 240, h: 160 };
 const ARENA_BOUNDS = { minX: 0, maxX: ARENA.w, minY: 0, maxY: ARENA.h };
 
-interface WorldSnap { combatants: RealtimeCombatant[] }
-
 export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   world = new RealtimeWorld(48, ARENA_BOUNDS);
   rng = Rng.fromSeed("arena");
   tick = { n: 0, hp: 30 };
-  worldHolder = { world: this.world };
   events: RealtimeEvent[] = [];
   layers = createChubLayers();
   store!: PersistenceStore;
@@ -70,17 +67,15 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
         (i) => ({ n: i.n, hp: i.hp }),
         (d: { n: number; hp: number }) => ({ n: d.n, hp: d.hp }),
         this.layers.messageStateBackend, chubTreeHistory()),
-      world: shard("world", this.worldHolder,
-        (h): WorldSnap => ({
-          combatants: [...h.world.combatants.values()].map((c) => ({ ...c, pos: { ...c.pos }, vel: { ...c.vel } })),
-        }),
-        (d: WorldSnap) => {
-          const w = new RealtimeWorld(48, ARENA_BOUNDS);
-          for (const c of d.combatants) w.add({ ...c, pos: { ...c.pos }, vel: { ...c.vel } });
-          // Mutate this.world in place so existing references stay valid.
+      // RealtimeWorld.toJSON() serializes combatants; attacks are transient and not persisted.
+      // Mutate this.world in place on deserialize so existing render references stay valid.
+      world: shard("world", this.world,
+        (w) => w.toJSON(),
+        (d: ReturnType<RealtimeWorld["toJSON"]>) => {
+          const fresh = RealtimeWorld.fromJSON(d);
           this.world.combatants.clear();
-          for (const c of w.combatants.values()) this.world.combatants.set(c.id, c);
-          return { world: this.world };
+          for (const [id, c] of fresh.combatants) this.world.combatants.set(id, c);
+          return this.world;
         },
         this.layers.messageStateBackend, chubTreeHistory()),
     });

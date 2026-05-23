@@ -153,7 +153,7 @@ lookup after you know what you're looking for.
 - `interface Attack { id, def, owner, bounds, vel?, bornAt, hits }`
 - `type RealtimeEvent = moved | attack_spawned | attack_hit | attack_expired | downed | out-of-bounds`
 - `interface ArenaBounds { minX, maxX, minY, maxY }`
-- `class RealtimeWorld { combatants; attacks; bounds?; constructor(cellSize=64, bounds?); add(c); spawnAttack(def, owner, initial, now); tick(dt, now): RealtimeEvent[] }` — combatants clamped, attacks outside bounds culled with `out-of-bounds` event
+- `class RealtimeWorld { combatants; attacks; bounds?; constructor(cellSize=64, bounds?); add(c); spawnAttack(def, owner, initial, now); tick(dt, now): RealtimeEvent[]; toJSON(); static fromJSON(data) }` — combatants clamped, attacks outside bounds culled with `out-of-bounds` event; attacks are NOT serialized (transient, reference stage-side AttackDef objects)
 
 ## `physics.ts`
 

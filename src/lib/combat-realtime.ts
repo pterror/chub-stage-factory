@@ -184,6 +184,32 @@ export class RealtimeWorld {
     return events;
   }
 
+  /** Serialize the world's combatant set for persistence.
+   *  Attacks are NOT serialized — in-flight projectiles don't round-trip
+   *  cleanly since they reference AttackDef objects that live in stage code. */
+  toJSON(): { combatants: RealtimeCombatant[]; cellSize: number; bounds?: ArenaBounds } {
+    return {
+      combatants: [...this.combatants.values()].map((c) => ({
+        ...c,
+        pos: { ...c.pos },
+        vel: { ...c.vel },
+        tags: c.tags ? [...c.tags] : undefined,
+      })),
+      cellSize: this.cellSize,
+      bounds: this.bounds ? { ...this.bounds } : undefined,
+    };
+  }
+
+  /** Reconstruct a RealtimeWorld from a toJSON() snapshot.
+   *  The returned world starts with no in-flight attacks. */
+  static fromJSON(data: { combatants: RealtimeCombatant[]; cellSize: number; bounds?: ArenaBounds }): RealtimeWorld {
+    const w = new RealtimeWorld(data.cellSize, data.bounds);
+    for (const c of data.combatants) {
+      w.add({ ...c, pos: { ...c.pos }, vel: { ...c.vel }, tags: c.tags ? [...c.tags] : undefined });
+    }
+    return w;
+  }
+
   private _attackOutOfBounds(a: Attack): boolean {
     if (!this.bounds) return false;
     const { minX, maxX, minY, maxY } = this.bounds;
