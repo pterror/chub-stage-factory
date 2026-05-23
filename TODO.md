@@ -41,3 +41,35 @@ history to the host's cursor (or commit a sibling). The infrastructure
 the cursor-tracking wiring in chub.ts would need to be added.
 
 Filed here because it requires real Chub host behavior to confirm.
+
+## Patterns layer (`src/lib/patterns/`)
+
+See `src/lib/COMPOSITION.md` for the positioning rationale. Summary: every `PATTERNS.md` recipe gets a paired `src/lib/patterns/<name>.ts` callable composer. Ergonomic parity with monolithic frameworks at the import statement; strictly more flexibility underneath.
+
+**Initial composer candidates** (one file per row, paired with the recipe of the same name):
+
+- `src/lib/patterns/inventory.ts`
+- `src/lib/patterns/effects.ts`
+- `src/lib/patterns/turn-combat.ts`
+- `src/lib/patterns/realtime-combat.ts`
+- `src/lib/patterns/body-transformation.ts`
+- `src/lib/patterns/cyber-slots.ts`
+- `src/lib/patterns/physics.ts`
+- `src/lib/patterns/scene.ts` (after `scene.ts` primitive lands)
+- `src/lib/patterns/world-exploration.ts` (after `world.ts` primitive lands)
+- `src/lib/patterns/dialogue.ts`
+- `src/lib/patterns/score.ts`
+- `src/lib/patterns/faction.ts` (composes `stats.ts` + content-gate predicate; reduces, no primitive needed)
+- `src/lib/patterns/skit.ts` (composes scene + observation + outcome resolution + actor; PARC's Skit shape as composition)
+- `src/lib/patterns/sandbox.ts`
+- `src/lib/patterns/synergy/llm-narrates-programmatic-tracks.ts`
+- `src/lib/patterns/synergy/programmatic-narrates-llm-decides.ts`
+- `src/lib/patterns/synergy/llm-constrained-by-procgen.ts`
+- `src/lib/patterns/synergy/procgen-validates-llm.ts`
+- `src/lib/patterns/synergy/cache-by-key.ts`
+- `src/lib/patterns/synergy/fallback-chain.ts`
+- `src/lib/patterns/synergy/seed-from-player.ts`
+
+Each composer is 90% wiring + 10% defaults; no private state; no new mechanics. The 7-games examples (CCA, Zork, HHGTTG, TiTS-shape, CoC-shape, LT-shape, FS-shape) are downstream of this — they're catalogs of which patterns each game uses.
+
+This work is queued behind: world/actor/intent/scene primitives, the synergy-pattern mining run, and any TiTS/LT prior-art mining for scene composition.
