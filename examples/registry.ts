@@ -25,6 +25,8 @@ import { PhysicsStage } from "./physics/Stage";
 import physicsInit from "./physics/test-init.json";
 import { RealtimeCombatStage } from "./realtime-combat/Stage";
 import realtimeCombatInit from "./realtime-combat/test-init.json";
+import { CompositeShowcaseStage } from "./composite-showcase/Stage";
+import compositeInit from "./composite-showcase/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -93,6 +95,18 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: ["combat-realtime", "physics", "rng"],
     factory: (d) => new RealtimeCombatStage(d),
     testInit: realtimeCombatInit,
+  },
+  {
+    name: "composite-showcase",
+    label: "Composite — Maven's clinic",
+    description: "Cyberpunk shop + ripperdoc + duel; body+equipment+inventory+combat.",
+    primitives: [
+      "body", "transformation", "equipment", "inventory",
+      "combat-turn", "effects", "observation", "prose-register",
+      "tag-parser", "chub-adapters", "rng",
+    ],
+    factory: (d) => new CompositeShowcaseStage(d),
+    testInit: compositeInit,
   },
 ];
 

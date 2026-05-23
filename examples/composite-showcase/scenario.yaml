@@ -1,0 +1,4 @@
+name: "Maven's clinic"
+characters:
+  - '@characters/maven.yaml'
+scenario: "Maven's one-room clinic-and-fence. A counter, a locker behind her, a scav loitering at the door."

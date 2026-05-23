@@ -1,0 +1,16 @@
+project_name: "Maven's Clinic (Composite Showcase)"
+tagline: "Cyberpunk ripperdoc + fence + duel. Body TF, equipment, inventory, turn combat in one stage."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags: ['Stage', 'Example', 'Cyberpunk', 'Composite']
+config_schema: { type: object, properties: {} }
+state_schema:
+  init: { type: object, properties: {} }
+  message:
+    type: object
+    properties:
+      ticks: { type: integer, default: 0 }
+      mode: { type: string, default: 'shop' }
+      ended: { type: string }
+      lastAction: { type: string }
+  chat: { type: object, properties: {} }
