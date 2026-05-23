@@ -43,9 +43,13 @@ import { snapshotHistory, type History } from "./history";
 import { asSaveable, type PersistenceStore, type Shard } from "./store";
 
 /** Default History strategy for messageState shards under Chub. Today this
- *  is a snapshot tree. If we discover Chub does not call setState on
- *  branch navigation, this is the place to add a fallback (e.g. track
- *  cursor via a stable id in the messageState payload itself). */
+ *  is a snapshot tree. The branch-aware behavior relies on Chub calling
+ *  setState(messageState) after a swipe / tree jump — see the SDK
+ *  declaration in stage.d.ts ("typically called after a jump to a
+ *  different place in the chat tree or a swipe"). The local TestRunner
+ *  does not exercise this; see /TODO.md "Persistence — open verification
+ *  gap" for the fallback we'd wire in if that assumption fails on the
+ *  real host. */
 export function chubTreeHistory<M>(): History<M> {
   return snapshotHistory<M>();
 }
