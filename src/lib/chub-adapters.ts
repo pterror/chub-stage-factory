@@ -22,7 +22,7 @@
 
 import type { Message, StageResponse } from "@chub-ai/stages-ts";
 import { AssembledObservation, formatObservations } from "./observation";
-import { ArchitectureName, RegisterSpec, RegisterPreset, proseInstructions } from "./prose-register";
+import { ArchitectureName, RegisterSpec, proseInstructions } from "./prose-register";
 import { ParseResult, Schema, parseTags } from "./tag-parser";
 
 // Re-export the persistence-layer Chub bindings so stages can import
@@ -89,7 +89,7 @@ export function composeAfterResponse<C, M>(...hooks: Hook<C, M>[]): Hook<C, M> {
 export function emitStageDirections(opts: {
   observations: readonly AssembledObservation[];
   architectures?: readonly ArchitectureName[];
-  register?: RegisterSpec | RegisterPreset;
+  register?: RegisterSpec;
   prefix?: string;
 }): string {
   const parts: string[] = [];

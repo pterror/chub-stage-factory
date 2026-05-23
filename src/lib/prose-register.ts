@@ -23,10 +23,16 @@
  *     distance: "close" | "near" | "wide";
  *     extras?: string[];
  *   }
- *   PRESET_REGISTERS: const Record of RegisterSpec — keys typed as RegisterPreset
- *   type RegisterPreset = keyof typeof PRESET_REGISTERS
  *   ARCHITECTURES: Record<ArchitectureName, { summary: string; example: string }>
  *   proseInstructions({architectures, register}): string
+ *
+ * NOTE on presets: this module deliberately ships NO named register
+ *   presets. PARC's lesson (verified): every stage that survives prod
+ *   inlines exactly one prose knob into its own textGen and treats the
+ *   rest as authorial choice. A typed catalog of "approved" presets is a
+ *   library claiming authority over taste. Stages that want to share
+ *   register choices across instances should declare their own `as const`
+ *   record in their own module and reference it by value, not by name.
  */
 
 export type ArchitectureName =
@@ -47,16 +53,6 @@ export interface RegisterSpec {
   distance: "close" | "near" | "wide";
   extras?: string[];
 }
-
-export const PRESET_REGISTERS = {
-  "close-2nd-past": { pov: "close-second", tense: "past", distance: "close" },
-  "close-2nd-present": { pov: "close-second", tense: "present", distance: "close" },
-  "1st-past": { pov: "first", tense: "past", distance: "close" },
-  "wide-3rd-present": { pov: "third", tense: "present", distance: "wide" },
-} as const satisfies Record<string, RegisterSpec>;
-
-/** Union of the preset register names — catches typos at compile time. */
-export type RegisterPreset = keyof typeof PRESET_REGISTERS;
 
 export const ARCHITECTURES: Record<ArchitectureName, { summary: string; example: string }> = {
   accumulation: {
@@ -123,10 +119,9 @@ export const ARCHITECTURES: Record<ArchitectureName, { summary: string; example:
 
 export function proseInstructions(opts: {
   architectures: readonly ArchitectureName[];
-  register: RegisterSpec | RegisterPreset;
+  register: RegisterSpec;
 }): string {
-  const reg: RegisterSpec =
-    typeof opts.register === "string" ? PRESET_REGISTERS[opts.register] : opts.register;
+  const reg: RegisterSpec = opts.register;
   const arches = opts.architectures.map((n) => {
     const a = ARCHITECTURES[n];
     return `- **${n}** — ${a.summary}\n    e.g. ${a.example}`;

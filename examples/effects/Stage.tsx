@@ -125,7 +125,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["focus_hold", "body_then_world"],
-      register: "close-2nd-present",
+      register: { pov: "close-second", tense: "present", distance: "close" },
       prefix:
         "Klio is the apothecary. To apply a tincture to the player, emit a tag like " +
         "`<apply>adrenaline</apply>` or `<dispel>calm</dispel>` (the tag bodies are stripped " +

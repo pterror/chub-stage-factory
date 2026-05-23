@@ -123,7 +123,7 @@ export class PhysicsStage extends StageBase<InitStateType, ChatStateType, Messag
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["arrival_sequence", "fragment_cascade"],
-      register: "wide-3rd-present",
+      register: { pov: "third", tense: "present", distance: "wide" },
       prefix:
         "Mara is the studio's keeper. The player throws objects in her atelier. To throw, " +
         "emit `<throw>x,y,vx,vy</throw>` (room is 200x120 wide; obstacles in the visual). " +

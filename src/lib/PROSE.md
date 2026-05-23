@@ -24,18 +24,28 @@ A register is the answer to three questions:
 - **Distance**: `"close"` (interiority constant), `"near"` (mostly external,
   brief interiority), `"wide"` (external; interiority via behaviour only)
 
-Built-in presets in `PRESET_REGISTERS`:
-
-| Key | POV | Tense | Distance |
-|-----|-----|-------|----------|
-| `close-2nd-past` | close-second | past | close |
-| `close-2nd-present` | close-second | present | close |
-| `1st-past` | first | past | close |
-| `wide-3rd-present` | third | present | wide |
+Construct a `RegisterSpec` inline at the callsite, e.g.
+`{ pov: "close-second", tense: "present", distance: "close" }`. A stage
+that reuses one across multiple emit sites should declare it as a local
+`const` in its own module — `prose-register.ts` deliberately ships no
+named preset catalog because preset names are an authorship choice and
+not a library concern. (Prior art: PARC ships exactly one prose knob,
+`disableImpersonation`, and inlines everything else into its own
+`textGen`.)
 
 `RegisterSpec.extras: string[]` lets a stage append things like
 `"no proper nouns"`, `"limit dialogue tags to 'said'"`, `"avoid the word
 'feel'"`.
+
+## Where prose instructions actually go
+
+`proseInstructions(...)` returns a verbatim block. A stage typically
+prepends it to its observation payload and emits the whole thing as
+`stageDirections` so the LLM treats it as ephemeral guidance rather than
+durable narration. Stages that run their own `textGen` (calling the
+generator service directly, the way PARC does) should paste the same
+block into the system prompt of that call — `proseInstructions` is a
+snippet library, not a transport.
 
 ## Architecture catalog
 

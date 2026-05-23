@@ -170,7 +170,7 @@ export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, Mes
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["body_then_world", "conditional_inversion"],
-      register: "close-2nd-present",
+      register: { pov: "close-second", tense: "present", distance: "close" },
       prefix:
         "Dr. Cull is the ripperdoc; the player is the patient. To install a body mod TF, " +
         "emit `<install>install_neural_port|install_socket_right|install_spinal_port|fleshweave</install>`. " +

@@ -237,7 +237,7 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: this.msg.mode === "shop" ? ["body_then_world", "appositive_fold"] : ["fragment_cascade", "terminal_sense_shift"],
-      register: "close-2nd-present",
+      register: { pov: "close-second", tense: "present", distance: "close" },
       prefix,
     });
     this.msg.body = this.body.toJSON();

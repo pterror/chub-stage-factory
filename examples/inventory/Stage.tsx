@@ -137,7 +137,7 @@ export class InventoryStage extends StageBase<InitStateType, ChatStateType, Mess
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["accumulation", "body_then_world"],
-      register: "close-2nd-present",
+      register: { pov: "close-second", tense: "present", distance: "close" },
       prefix: "Pak is the POV-adjacent shopkeeper. The block below is ground truth; do not name spot ids verbatim — translate them into prose.",
     });
     this.msg.inv = this.state.inv.toJSON();

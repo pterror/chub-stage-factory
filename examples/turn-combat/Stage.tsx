@@ -146,7 +146,7 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["fragment_cascade", "terminal_sense_shift"],
-      register: "close-2nd-present",
+      register: { pov: "close-second", tense: "present", distance: "close" },
       prefix:
         "You are narrating a duel on temple steps. On the player's behalf, choose ONE action " +
         "for the next round by emitting `<action>swing</action>` (or guard/sunder) somewhere in " +

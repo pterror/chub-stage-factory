@@ -138,7 +138,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["body_then_world", "accumulation"],
-      register: "close-2nd-present",
+      register: { pov: "close-second", tense: "present", distance: "close" },
       prefix:
         "Vey is the alchemist; the player is the subject of the tincture. To apply a tincture, " +
         "emit `<drink>cat_tail|dragon_horns|fur_torso</drink>`. To restore a baseline body, " +

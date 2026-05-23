@@ -121,7 +121,7 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["fragment_cascade", "terminal_sense_shift"],
-      register: "close-2nd-present",
+      register: { pov: "close-second", tense: "present", distance: "close" },
       prefix:
         "An arena (240×160). Drones circle, closing. To fire a bullet from your position, emit " +
         "`<shoot>dx,dy</shoot>` (direction; will be normalised). Render the auditory events " +
