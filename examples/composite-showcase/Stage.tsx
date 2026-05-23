@@ -38,6 +38,7 @@ import { Inventory } from "../../src/lib/inventory";
 import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, runRound, AttackProfile, CombatEvent } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
+import { Registry, PlaceholderRegistry } from "../../src/lib/registry";
 import { Rng } from "../../src/lib/rng";
 import { parseTagsBatch } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
@@ -52,16 +53,21 @@ interface ChatStateType { [k: string]: unknown }
 type InitStateType = { [k: string]: unknown };
 type ConfigType = null;
 
-const TFS: Record<string, TransformationDef> = {
+const TFS = new Registry<TransformationDef>({
   install_neural_port: { id: "install_neural_port", slot: "head", addTags: ["neural-port"], removeTags: ["flesh-only"], baseDuration: null, conflicts: {}, displayName: "neural port install" },
   install_spinal_port: { id: "install_spinal_port", slot: "torso", addTags: ["spinal-port"], removeTags: ["flesh-only"], baseDuration: null, conflicts: {}, displayName: "spinal port install" },
   fleshweave: { id: "fleshweave", slot: "head", addTags: ["flesh-only"], removeTags: ["neural-port"], baseDuration: null, conflicts: {}, displayName: "fleshweave" },
-};
+});
 
-const MODS: Record<string, EquipmentDef> = {
+// MODS is a PlaceholderRegistry so the "invent cyberware" demo (see
+// inventCyberware / <invent> tag) can register a placeholder under a
+// fresh id, kick off generation, and replace it with the real def
+// when the LLM returns — without a parallel pending-map. Static mods
+// are seeded at construction; invented ones land alongside them.
+const MODS = new PlaceholderRegistry<EquipmentDef>({
   deckjack: eqFromDict({ id: "deckjack", slot: "head", constraints: ["neural-port", "!flesh-only"], onConflict: "unequip", grantsTags: ["jacked-in-capable"], displayName: "deck-jack" }),
   reflex_booster: eqFromDict({ id: "reflex_booster", slot: "torso", constraints: ["spinal-port"], onConflict: "unequip", grantsTags: ["fast-twitch"], displayName: "reflex booster" }),
-};
+});
 
 const REFLEX_EFFECT: EffectDef = {
   id: "fast-twitch", stacking: "replace", duration: null,
@@ -72,9 +78,9 @@ const HACK_EFFECT: EffectDef = {
   id: "hacked", stacking: "replace", duration: 2,
   targets: { stats: ["dodge"] }, baseMagnitudes: { stats: { dodge: -0.2 } },
 };
-const EFFECT_DEFS: Record<string, EffectDef> = {
-  [REFLEX_EFFECT.id]: REFLEX_EFFECT, [HACK_EFFECT.id]: HACK_EFFECT,
-};
+const EFFECT_DEFS = new Registry<EffectDef>()
+  .register(REFLEX_EFFECT.id, REFLEX_EFFECT)
+  .register(HACK_EFFECT.id, HACK_EFFECT);
 
 const SWING: ActionDef<Combatant, Combatant, World> = { id: "swing", costs: { ap: 1 }, range: 1, effects: [], targetFilter: (a, t) => t.hp > 0 && t.id !== a.id };
 const HACK: ActionDef<Combatant, Combatant, World> = {
@@ -122,7 +128,7 @@ function restoreCombatants(holder: { cs: Combatant[]; ended?: "pc-down" | "enemy
     c.hp = snap.hp;
     if (c.resources) c.resources.ap = snap.ap;
     c.tags = snap.tags;
-    c.effects = EffectStore.fromJSON(snap.effects, EFFECT_DEFS);
+    c.effects = EffectStore.fromJSON(snap.effects, EFFECT_DEFS.toJSON());
   }
   holder.ended = data.ended;
 }
@@ -173,7 +179,7 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
         this.layers.messageStateBackend, chubTreeHistory()),
       inv: shardOf("inv", this.inv, (d) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
       body: shardOf("body", this.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-      loadout: shard("loadout", this.loadout, (i) => i.toJSON(), (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      loadout: shard("loadout", this.loadout, (i) => i.toJSON(), (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS.toJSON()), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
       combatants: shard("combatants", this.combatantsHolder,
         (h) => snapCombatants(h),
         (d: CombatantsSnap) => {
@@ -255,8 +261,8 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
             }
             return out;
           },
-          available_tfs: () => Object.keys(TFS),
-          available_equip: () => Object.entries(MODS).map(([id, m]) => ({ id, slot: m.slot, requires: m.constraints })),
+          available_tfs: () => TFS.keys(),
+          available_equip: () => MODS.entries().map(([id, m]) => ({ id, slot: m.slot, requires: m.constraints, pending: MODS.isPlaceholder(id) })),
         } },
       });
     } else {
@@ -301,8 +307,8 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     const now = this.tick.n;
     const [r1, r2, r3, r4, r5, r6] = parseTagsBatch(botMessage.content, [
-      { install: { kind: "string", enum: Object.keys(TFS) } },
-      { equip: { kind: "string", enum: Object.keys(MODS) } },
+      { install: { kind: "string", enum: TFS.keys() } },
+      { equip: { kind: "string" } },
       { unequip: { kind: "string", enum: ["head", "torso"] } },
       { take: { kind: "string" } },
       { start_combat: { kind: "bool" } },
@@ -312,12 +318,16 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
 
     if (this.tick.mode === "shop") {
       if (typeof r1.parsed.install === "string" && r1.parsed.install) {
-        applyTf(TFS[r1.parsed.install as string], this.body, now);
+        applyTf(TFS.require(r1.parsed.install as string), this.body, now);
         this.tick.lastAction = `installed:${r1.parsed.install}`;
       }
       if (typeof r2.parsed.equip === "string" && r2.parsed.equip) {
-        const res = this.loadout.equip(MODS[r2.parsed.equip as string], now);
+        const modDef = MODS.get(r2.parsed.equip as string);
+        if (!modDef) { this.tick.lastAction = `equip-failed:no-such-mod`; }
+        else {
+        const res = this.loadout.equip(modDef, now);
         this.tick.lastAction = res.ok ? `equipped:${r2.parsed.equip}` : `equip-failed:${(res as { reason: string }).reason}`;
+        }
       }
       if (typeof r3.parsed.unequip === "string" && r3.parsed.unequip) {
         this.loadout.unequip(r3.parsed.unequip as string);

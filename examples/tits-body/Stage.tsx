@@ -20,6 +20,7 @@ import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { Body } from "../../src/lib/body";
+import { Registry } from "../../src/lib/registry";
 import { TransformationDef, apply, applyTrajectories, getConflicts } from "../../src/lib/transformation";
 import { Snapshots } from "../../src/lib/snapshots";
 import { parseTags } from "../../src/lib/tag-parser";
@@ -35,7 +36,7 @@ interface ChatStateType { [k: string]: unknown }
 type InitStateType = null;
 type ConfigType = null;
 
-const TFS: Record<string, TransformationDef> = {
+const TFS = new Registry<TransformationDef>({
   cat_tail: {
     id: "cat_tail", slot: "tail",
     addTags: ["furred", "prehensile-mild", "tail-cat"], removeTags: [],
@@ -61,7 +62,7 @@ const TFS: Record<string, TransformationDef> = {
     baseDuration: 5, conflicts: {},
     displayName: "torso pelt tincture",
   },
-};
+});
 
 export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   body: Body;
@@ -113,7 +114,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
   }
 
   private tryApply(id: string, now: number): { ok: boolean; reason?: string } {
-    const def = TFS[id]; if (!def) return { ok: false, reason: "no-such-tf" };
+    const def = TFS.get(id); if (!def) return { ok: false, reason: "no-such-tf" };
     const confs = getConflicts(def, this.body);
     for (const c of confs) {
       if (c.incomingSays === "block" || c.existingSays === "block") return { ok: false, reason: `block:${c.existingId}` };
@@ -166,7 +167,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     const now = this.tick.n;
-    const r1 = parseTags<Record<string, unknown>>(botMessage.content, { drink: { kind: "string", enum: Object.keys(TFS) } });
+    const r1 = parseTags<Record<string, unknown>>(botMessage.content, { drink: { kind: "string", enum: TFS.keys() } });
     const r2 = parseTags<Record<string, unknown>>(r1.stripped, { restore: { kind: "string" } });
     if (typeof r1.parsed.drink === "string" && r1.parsed.drink) {
       const res = this.tryApply(r1.parsed.drink as string, now);

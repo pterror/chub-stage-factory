@@ -18,6 +18,7 @@ import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { EffectDef, EffectStore, EffectMagnitudes } from "../../src/lib/effects";
+import { Registry } from "../../src/lib/registry";
 import { Scheduler } from "../../src/lib/scheduler";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
@@ -31,7 +32,7 @@ type ChatStateType = null;
 type InitStateType = null;
 type ConfigType = null;
 
-const TINCTURES: Record<string, EffectDef> = {
+const TINCTURES = new Registry<EffectDef>({
   adrenaline: {
     id: "adrenaline", stacking: "extend", duration: 6,
     targets: { stats: ["dodge", "damage"], tags: ["focus"] },
@@ -55,7 +56,7 @@ const TINCTURES: Record<string, EffectDef> = {
     targets: { tags: ["calm"] },
     baseMagnitudes: { tagsAdd: ["calm"] },
   },
-};
+});
 
 export class EffectsStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   store = new EffectStore();
@@ -73,7 +74,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
     });
     this.pStore = new PersistenceStore({
       tick: counterShard("tick", this.tick, this.layers.messageStateBackend, chubTreeHistory()),
-      effects: shardOf("effects", this.store, (d) => EffectStore.fromJSON(d, TINCTURES), this.layers.messageStateBackend, chubTreeHistory()),
+      effects: shardOf("effects", this.store, (d) => EffectStore.fromJSON(d, TINCTURES.toJSON()), this.layers.messageStateBackend, chubTreeHistory()),
     });
     this.bound = bindStore<ChatStateType, MessageStateType>(this.pStore, { layers: this.layers });
   }
@@ -107,7 +108,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
       {
         id: "tincture-menu", channels: ["visual"], salience: () => 0.3, habituationTau: 20,
         properties: { visual: {
-          available: () => Object.entries(TINCTURES).map(([id, def]) => ({ id, stacking: def.stacking, duration: def.duration })),
+          available: () => TINCTURES.entries().map(([id, def]) => ({ id, stacking: def.stacking, duration: def.duration })),
         } },
       },
     ];
@@ -138,8 +139,9 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
     const r1 = parseTags<Record<string, unknown>>(botMessage.content, { apply: { kind: "string" } });
     const r2 = parseTags<Record<string, unknown>>(r1.stripped, { dispel: { kind: "string" } });
     const applyId = typeof r1.parsed.apply === "string" ? (r1.parsed.apply as string).trim() : "";
-    if (applyId && TINCTURES[applyId]) {
-      this.store.apply(TINCTURES[applyId], now);
+    const tincture = applyId ? TINCTURES.get(applyId) : undefined;
+    if (tincture) {
+      this.store.apply(tincture, now);
       this.events.push(`applied:${applyId}@${now}`);
     }
     const dispelTag = typeof r2.parsed.dispel === "string" ? (r2.parsed.dispel as string).trim() : "";

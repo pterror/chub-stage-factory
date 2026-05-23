@@ -25,6 +25,7 @@ import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, runRound, AttackProfile, CombatEvent } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
+import { Registry } from "../../src/lib/registry";
 import { Rng } from "../../src/lib/rng";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
@@ -47,9 +48,9 @@ const SUNDER_EFFECT: EffectDef = {
   id: "sundered", duration: 2, stacking: "replace",
   targets: { stats: ["armor"] }, baseMagnitudes: { stats: { armor: -2 } },
 };
-const EFFECT_DEFS: Record<string, EffectDef> = {
-  [GUARD_EFFECT.id]: GUARD_EFFECT, [SUNDER_EFFECT.id]: SUNDER_EFFECT,
-};
+const EFFECT_DEFS = new Registry<EffectDef>()
+  .register(GUARD_EFFECT.id, GUARD_EFFECT)
+  .register(SUNDER_EFFECT.id, SUNDER_EFFECT);
 
 const SWING: ActionDef<Combatant, Combatant, World> = {
   id: "swing", costs: { ap: 1 }, range: 1, effects: [],
@@ -102,7 +103,7 @@ function restoreCombatants(holder: { cs: Combatant[]; ended?: "pc-down" | "enemy
     if (!c) continue;
     c.hp = snap.hp;
     if (c.resources) c.resources.ap = snap.ap;
-    c.effects = EffectStore.fromJSON(snap.effects, EFFECT_DEFS);
+    c.effects = EffectStore.fromJSON(snap.effects, EFFECT_DEFS.toJSON());
   }
   holder.ended = data.ended;
 }

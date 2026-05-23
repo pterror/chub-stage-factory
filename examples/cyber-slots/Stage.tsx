@@ -21,6 +21,7 @@ import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { Body } from "../../src/lib/body";
 import { TransformationDef, apply as applyTf } from "../../src/lib/transformation";
 import { EquipmentDef, Loadout, fromDict as eqFromDict } from "../../src/lib/equipment";
+import { Registry } from "../../src/lib/registry";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
@@ -34,7 +35,7 @@ interface ChatStateType { [k: string]: unknown }
 type InitStateType = null;
 type ConfigType = null;
 
-const MODS: Record<string, EquipmentDef> = {
+const MODS = new Registry<EquipmentDef>({
   deckjack: eqFromDict({
     id: "deckjack", slot: "head", constraints: ["neural-port", "!flesh-only"],
     onConflict: "degrade", degradePenalties: { hackSpeed: 0.4 },
@@ -49,14 +50,14 @@ const MODS: Record<string, EquipmentDef> = {
     id: "reflex_booster", slot: "torso", constraints: ["spinal-port"],
     onConflict: "unequip", grantsTags: ["fast-twitch"], displayName: "Sandevistan-class reflex booster",
   }),
-};
+});
 
-const TFS: Record<string, TransformationDef> = {
+const TFS = new Registry<TransformationDef>({
   install_neural_port: { id: "install_neural_port", slot: "head", addTags: ["neural-port"], removeTags: ["flesh-only"], baseDuration: null, conflicts: {}, displayName: "install neural port" },
   install_socket_right: { id: "install_socket_right", slot: "head", addTags: ["socket-right"], removeTags: [], baseDuration: null, conflicts: {}, displayName: "install right eye socket" },
   install_spinal_port: { id: "install_spinal_port", slot: "torso", addTags: ["spinal-port"], removeTags: [], baseDuration: null, conflicts: {}, displayName: "install spinal port" },
   fleshweave: { id: "fleshweave", slot: "head", addTags: ["flesh-only"], removeTags: ["neural-port"], baseDuration: null, conflicts: {}, displayName: "fleshweave reversal" },
-};
+});
 
 export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
   body: Body;
@@ -86,7 +87,7 @@ export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, Mes
       body: shardOf("body", this.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
       loadout: shard("loadout", this.loadout,
         (i) => i.toJSON(),
-        (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS),
+        (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS.toJSON()),
         this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
     });
     this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
@@ -124,7 +125,7 @@ export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, Mes
             }
             return out;
           },
-          available: () => Object.entries(MODS).map(([id, def]) => ({ id, slot: def.slot, constraints: def.constraints })),
+          available: () => MODS.entries().map(([id, def]) => ({ id, slot: def.slot, constraints: def.constraints })),
         } },
       },
       {
@@ -156,18 +157,18 @@ export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, Mes
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     const now = this.tick.n;
     let text = botMessage.content;
-    const r1 = parseTags<Record<string, unknown>>(text, { install: { kind: "string", enum: Object.keys(TFS) } });
+    const r1 = parseTags<Record<string, unknown>>(text, { install: { kind: "string", enum: TFS.keys() } });
     text = r1.stripped;
-    const r2 = parseTags<Record<string, unknown>>(text, { equip: { kind: "string", enum: Object.keys(MODS) } });
+    const r2 = parseTags<Record<string, unknown>>(text, { equip: { kind: "string", enum: MODS.keys() } });
     text = r2.stripped;
     const r3 = parseTags<Record<string, unknown>>(text, { unequip: { kind: "string", enum: ["head", "torso"] } });
     text = r3.stripped;
     if (typeof r1.parsed.install === "string" && r1.parsed.install) {
-      applyTf(TFS[r1.parsed.install as string], this.body, now);
+      applyTf(TFS.require(r1.parsed.install as string), this.body, now);
       this.tick.lastAction = `installed:${r1.parsed.install}`;
     }
     if (typeof r2.parsed.equip === "string" && r2.parsed.equip) {
-      const res = this.loadout.equip(MODS[r2.parsed.equip as string], now);
+      const res = this.loadout.equip(MODS.require(r2.parsed.equip as string), now);
       this.tick.lastAction = res.ok ? `equipped:${r2.parsed.equip}` : `equip-failed:${(res as { reason: string }).reason}`;
     }
     if (typeof r3.parsed.unequip === "string" && r3.parsed.unequip) {
