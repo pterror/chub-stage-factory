@@ -1,0 +1,4 @@
+name: "Vey's apothecary"
+characters:
+  - '@characters/vey.yaml'
+scenario: "Vey's apothecary. A cushioned chair, a mirror, a rack of stoppered tinctures."

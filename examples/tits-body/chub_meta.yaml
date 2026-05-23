@@ -1,0 +1,14 @@
+project_name: "Vey the Transformation Alchemist"
+tagline: "Part-tracked body with gradual TF trajectories and undoable snapshots."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags: ['Stage', 'Example', 'Body', 'Transformation']
+config_schema: { type: object, properties: {} }
+state_schema:
+  init: { type: object, properties: {} }
+  message:
+    type: object
+    properties:
+      ticks: { type: integer, default: 0 }
+      lastApplied: { type: string }
+  chat: { type: object, properties: {} }

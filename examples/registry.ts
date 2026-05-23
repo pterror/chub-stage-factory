@@ -17,6 +17,8 @@ import { EffectsStage } from "./effects/Stage";
 import effectsInit from "./effects/test-init.json";
 import { TurnCombatStage } from "./turn-combat/Stage";
 import turnCombatInit from "./turn-combat/test-init.json";
+import { TitsBodyStage } from "./tits-body/Stage";
+import titsBodyInit from "./tits-body/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -53,6 +55,14 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: ["action", "combat-turn", "effects", "stats", "rng", "tag-parser"],
     factory: (d) => new TurnCombatStage(d),
     testInit: turnCombatInit,
+  },
+  {
+    name: "tits-body",
+    label: "TiTS body — Vey the alchemist",
+    description: "Part-tracked body, gradual TF trajectories, snapshots.",
+    primitives: ["body", "transformation", "tags", "snapshots", "observation"],
+    factory: (d) => new TitsBodyStage(d),
+    testInit: titsBodyInit,
   },
 ];
 
