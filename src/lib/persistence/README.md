@@ -80,6 +80,26 @@ class MyStage extends StageBase<Init, Chat, Msg, Config> {
 }
 ```
 
+## `layerShards` — grouping by backend
+
+When 3+ shards share the same backend+history, `layerShards` eliminates the repeated backend+history tail. Pass `history` as a factory function (called once per shard):
+
+```ts
+new PersistenceStore({
+  rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), initBackend, noHistory()),
+  ...layerShards(
+    { backend: chatBackend, history: () => forbidBranching(snapshotHistory()) },
+    {
+      body:      asSaveableClass(this.body,   (d) => Body.fromJSON(d)),
+      loadout:   asSaveable(this.loadout,     (i) => i.toJSON(), (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, body, MODS)),
+      combatants: asSaveable(this.cs, snapCs, restoreCs),
+    },
+  ),
+});
+```
+
+Note: `layerShards` takes `SaveableState<any>` values (from `asSaveable` / `asSaveableClass`), not raw instances. Net savings only materialize for 3+ multi-line shard entries — for 2-shard groups, individual `shard`/`shardOf` calls are shorter.
+
 ## `counterShard` — pure tick counters
 
 When a shard holds only a `{ n: number }` box, `counterShard` is a one-liner:

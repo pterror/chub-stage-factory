@@ -22,7 +22,7 @@ import { Inventory, Stack } from "../../src/lib/inventory";
 import { ObservationSource, assembleObservations } from "../../src/lib/observation";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import {
-  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shardOf, counterShard,
+  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, counterShard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }

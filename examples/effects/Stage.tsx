@@ -23,7 +23,7 @@ import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
-  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shardOf, counterShard,
+  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, counterShard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }

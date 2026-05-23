@@ -39,8 +39,8 @@ import {
   type LayerSet,
   type SaveBackend,
 } from "./backend";
-import { snapshotHistory, type History } from "./history";
-import { asSaveable, type PersistenceStore, type Shard } from "./store";
+import { snapshotHistory, noHistory, type History } from "./history";
+import { asSaveable, type PersistenceStore, type SaveableState, type Shard } from "./store";
 
 /** Default History strategy for messageState shards under Chub. Today this
  *  is a snapshot tree. The branch-aware behavior relies on Chub calling
@@ -227,4 +227,36 @@ export function shardOf<T extends { toJSON(): any }>(
   history: History<ReturnType<T["toJSON"]>>,
 ): Shard<ReturnType<T["toJSON"]>> {
   return shard(name, instance, (i) => i.toJSON() as ReturnType<T["toJSON"]>, fromJSON, backend, history);
+}
+
+/** Group multiple shards that share the same backend and history strategy.
+ *  Pass `history` as a FACTORY function (e.g. `chubTreeHistory`, not
+ *  `chubTreeHistory()`) — it is called once per entry so each shard gets
+ *  its own independent history instance. Omit `history` to get `noHistory`
+ *  for all entries. Spread the result into the PersistenceStore constructor.
+ *
+ * ```ts
+ * new PersistenceStore({
+ *   ...layerShards(
+ *     { backend: this.layers.messageStateBackend, history: chubTreeHistory },
+ *     { inv: asSaveableClass(this.inv, (d) => Inventory.fromJSON(d)), tick: tickState },
+ *   ),
+ *   rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
+ * });
+ * ```
+ */
+export function layerShards<K extends string>(
+  layer: { backend: SaveBackend; history?: () => History<any> },
+  entries: Record<K, SaveableState<any>>,
+): Record<K, Shard<any>> {
+  const out: Record<string, Shard<any>> = {};
+  for (const [name, state] of Object.entries(entries) as [K, SaveableState<any>][]) {
+    out[name] = {
+      name,
+      state,
+      backend: layer.backend,
+      history: layer.history ? layer.history() : noHistory<any>(),
+    };
+  }
+  return out as Record<K, Shard<any>>;
 }

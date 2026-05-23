@@ -252,6 +252,7 @@ table and full example.
 - `shard(name, instance, toJSON, fromJSON, backend, history): Shard<M>` — one-liner constructor
 - `shardOf(name, instance, fromJSON, backend, history): Shard<M>` — infer-friendly variant; calls `instance.toJSON()` automatically; use when `fromJSON` takes only the serialized data
 - `counterShard(name, box: { n: number }, backend, history): Shard<number>` — shard a pure integer counter; box must contain only `n`
+- `layerShards(layer: { backend, history?: () => History }, entries: Record<string, SaveableState>): Record<string, Shard>` — group shards that share a backend+history; `history` is a factory called once per entry; spread result into PersistenceStore constructor. Net savings only for 3+ multi-line shard entries.
 
 ## `replay.ts`
 

@@ -27,7 +27,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
-  bindStore, mergeResponses, shard, shardOf,
+  bindStore, mergeResponses, shardOf, shard,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; hp: number; [k: string]: unknown }

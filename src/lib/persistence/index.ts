@@ -42,4 +42,5 @@ export {
   shard,
   shardOf,
   counterShard,
+  layerShards,
 } from "./chub";
