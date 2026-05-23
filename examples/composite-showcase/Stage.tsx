@@ -39,6 +39,7 @@ import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, runRound, AttackProfile, CombatEvent } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
 import { Registry, PlaceholderRegistry } from "../../src/lib/registry";
+import { Timeline, summarize } from "../../src/lib/timeline";
 import { Rng } from "../../src/lib/rng";
 import { parseTagsBatch } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
@@ -139,7 +140,7 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
   inv: Inventory;
   rng = Rng.fromSeed("mavens-clinic");
   combatantsHolder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" } = { cs: [] };
-  events: CombatEvent[] = [];
+  events = new Timeline<CombatEvent>({ id: "combat-events", channels: ["auditory"], key: "last_events", windowSize: 12, habituationTau: 0 });
   tick = { n: 0, mode: "shop" as "shop" | "combat" | "ended", lastAction: undefined as string | undefined };
   pcChoice: "swing" | "hack" = "swing";
   layers = createChubLayers();
@@ -274,9 +275,11 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
             dodge: (c.stats?.dodge ?? 0) + (c.effects?.totalMagnitudes(now).stats?.dodge ?? 0),
             tags: c.tags ?? [], effects: c.effects?.active().map((i) => i.id) ?? [],
           })),
-          last_events: () => this.events.slice(-12),
         } },
       });
+      // Append the combat-events timeline as its own source; it provides
+      // last_events on the auditory channel via ObservationSource.
+      baseSources.push(this.events);
     }
     return baseSources;
   }
@@ -349,7 +352,7 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
       if (r5.parsed.start_combat === true) {
         this.tick.mode = "combat";
         this.buildCombat();
-        this.events = [];
+        this.events.clear();
         this.tick.lastAction = "combat-started";
       }
     } else if (this.tick.mode === "combat") {
@@ -357,7 +360,8 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
       const cs = this.combatantsHolder.cs;
       for (const c of cs) if (c.resources) c.resources.ap = c.id === "pc" ? 3 : 2;
       for (const c of cs) c.effects?.tick(now);
-      this.events = runRound(cs, this.chooseFor, { combatants: cs }, now, this.rng.mechanical);
+      const round = runRound(cs, this.chooseFor, { combatants: cs }, now, this.rng.mechanical);
+      for (const e of round) this.events.push(e, now);
       const pc = cs.find((c) => c.id === "pc")!;
       const scav = cs.find((c) => c.id === "scav")!;
       if (pc.hp <= 0) { this.combatantsHolder.ended = "pc-down"; this.tick.mode = "ended"; }
@@ -429,7 +433,7 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
                     <tr key={c.id}><td style={{ color: "#9ad" }}>{c.id}</td><td>HP {c.hp}</td><td>AP {c.resources?.ap}</td><td>{c.effects?.active().map((i) => i.id).join(",") || "—"}</td></tr>
                   ))}
                 </tbody></table>
-                <pre style={{ background: "#000", padding: 6, maxHeight: 160, overflow: "auto" }}>{this.events.map((e) => JSON.stringify(e)).join("\n") || "—"}</pre>
+                <pre style={{ background: "#000", padding: 6, maxHeight: 160, overflow: "auto" }}>{summarize(this.events.window(30), (e, at) => `${at}: ${JSON.stringify(e)}`) || "—"}</pre>
                 {this.combatantsHolder.ended && <h4 style={{ color: "#e88" }}>End: {this.combatantsHolder.ended}</h4>}
               </>
             )}

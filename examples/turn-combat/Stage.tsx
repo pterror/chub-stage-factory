@@ -26,6 +26,7 @@ import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, runRound, AttackProfile, CombatEvent } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
+import { Timeline, summarize } from "../../src/lib/timeline";
 import { Rng } from "../../src/lib/rng";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
@@ -113,7 +114,8 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
   combatants: Combatant[];
   combatantsHolder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" };
   turn = { n: 0, choice: "swing" as "swing" | "guard" | "sunder" };
-  events: CombatEvent[] = [];
+  events = new Timeline<CombatEvent>({ id: "last-round-events", channels: ["auditory"], windowSize: 20, saliencePer: 8, habituationTau: 1 });
+  lastRound: CombatEvent[] = [];
   habituation = new Map<string, number>();
   layers = createChubLayers();
   store!: PersistenceStore;
@@ -177,15 +179,15 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
     return [
       { id: "combat-state", channels: ["visual"], salience: () => 1, habituationTau: 0,
         properties: { visual: { combatants: () => this.combatants.map(summary) } } },
-      { id: "last-round-events", channels: ["auditory"],
-        salience: () => Math.min(1, this.events.length / 8), habituationTau: 1,
-        properties: { auditory: { events: () => this.events.slice(-20) } } },
     ];
   }
 
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     const now = this.turn.n;
-    const observed = assembleObservations(this.observationSources(now), { now }, { now, maxCount: 3 });
+    const observed = assembleObservations(
+      [...this.observationSources(now), this.events],
+      { now }, { now, maxCount: 3 },
+    );
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["fragment_cascade", "terminal_sense_shift"],
@@ -212,7 +214,8 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
     this.turn.n += 1;
     for (const c of this.combatants) if (c.resources) c.resources.ap = c.id === "pc" ? 3 : 2;
     for (const c of this.combatants) c.effects?.tick(this.turn.n);
-    this.events = runRound(this.combatants, this.chooseFor, { combatants: this.combatants }, this.turn.n, this.rng.mechanical);
+    this.lastRound = runRound(this.combatants, this.chooseFor, { combatants: this.combatants }, this.turn.n, this.rng.mechanical);
+    for (const e of this.lastRound) this.events.push(e, this.turn.n);
     const pc = this.combatants.find((c) => c.id === "pc")!;
     const en = this.combatants.find((c) => c.id === "duellist")!;
     if (pc.hp <= 0) this.combatantsHolder.ended = "pc-down";
@@ -242,7 +245,7 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
         </table>
         <h4>Last round events</h4>
         <pre style={{ background: "#000", padding: 8, maxHeight: 220, overflow: "auto" }}>
-{this.events.map((e) => JSON.stringify(e)).join("\n") || "—"}
+{summarize(this.events.window(30), (e, at) => `${at}: ${JSON.stringify(e)}`) || "—"}
         </pre>
         {this.combatantsHolder.ended && <h3 style={{ color: "#e88" }}>Combat ended: {this.combatantsHolder.ended}</h3>}
       </div>

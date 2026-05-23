@@ -22,6 +22,7 @@ import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { RealtimeWorld, AttackDef, RealtimeEvent, RealtimeCombatant } from "../../src/lib/combat-realtime";
 import { Rng } from "../../src/lib/rng";
+import { Timeline, summarize } from "../../src/lib/timeline";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
@@ -47,7 +48,7 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
   world = new RealtimeWorld(48, ARENA_BOUNDS);
   rng = Rng.fromSeed("arena");
   tick = { n: 0, hp: 30 };
-  events: RealtimeEvent[] = [];
+  events = new Timeline<RealtimeEvent>({ id: "events", channels: ["auditory"], key: "last", windowSize: 15, saliencePer: 6, habituationTau: 1 });
   layers = createChubLayers();
   store!: PersistenceStore;
   bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
@@ -121,11 +122,6 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
           attacks: () => this.world.attacks.length,
         } },
       },
-      {
-        id: "events", channels: ["auditory"],
-        salience: () => Math.min(1, this.events.length / 6), habituationTau: 1,
-        properties: { auditory: { last: () => this.events.slice(-15) } },
-      },
     ];
   }
 
@@ -141,7 +137,10 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
 
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     this.tick.n += 1;
-    const observed = assembleObservations(this.observationSources(), { now: this.tick.n }, { now: this.tick.n, maxCount: 3 });
+    const observed = assembleObservations(
+      [...this.observationSources(), this.events],
+      { now: this.tick.n }, { now: this.tick.n, maxCount: 3 },
+    );
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["fragment_cascade", "terminal_sense_shift"],
@@ -162,8 +161,12 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
       const [dx, dy] = (r.parsed.shoot as string[]).map(Number);
       if (Number.isFinite(dx) && Number.isFinite(dy)) this.shoot(dx, dy, now);
     }
-    this.events = [];
-    for (let i = 0; i < 5; i++) this.events.push(...this.world.tick(0.1, now + i * 0.1));
+    // Cull older entries; the timeline is append-only across messages but
+    // we only want this turn's beat to dominate prose.
+    this.events.clear();
+    for (let i = 0; i < 5; i++) {
+      for (const e of this.world.tick(0.1, now + i * 0.1)) this.events.push(e, now);
+    }
     if (now % 3 === 0) this.spawnDrone(now);
     const you = this.world.combatants.get("you");
     if (you) this.tick.hp = you.hp;
@@ -184,7 +187,7 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
           ))}
         </svg>
         <pre style={{ background: "#000", padding: 8, marginTop: 8, maxHeight: 160, overflow: "auto" }}>
-{this.events.map((e) => JSON.stringify(e)).join("\n") || "—"}
+{summarize(this.events.all(), (e) => JSON.stringify(e)) || "—"}
         </pre>
       </div>
     );

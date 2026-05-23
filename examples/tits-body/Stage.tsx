@@ -21,6 +21,7 @@ import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { Body } from "../../src/lib/body";
 import { Registry } from "../../src/lib/registry";
+import { Timeline } from "../../src/lib/timeline";
 import { TransformationDef, apply, applyTrajectories, getConflicts } from "../../src/lib/transformation";
 import { Snapshots } from "../../src/lib/snapshots";
 import { parseTags } from "../../src/lib/tag-parser";
@@ -68,7 +69,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
   body: Body;
   snaps: Snapshots;
   tick = { n: 0, lastApplied: undefined as string | undefined };
-  applied: { id: string; at: number }[] = [];
+  applied = new Timeline<string>({ id: "tinctures-applied", channels: ["interoceptive"], key: "applied", windowSize: 8, habituationTau: 6 });
   layers = createChubLayers();
   store!: PersistenceStore;
   bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
@@ -122,7 +123,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
     }
     const inst = apply(def, this.body, now);
     if (!inst) return { ok: false, reason: "canApply-failed" };
-    this.applied.push({ id, at: now });
+    this.applied.push(id, now);
     return { ok: true };
   }
 
@@ -151,7 +152,10 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
     const now = this.tick.n;
     applyTrajectories(this.body, now);
     this.body.tick(now);
-    const observed = assembleObservations(this.observationSources(now), { now }, { now, maxCount: 2 });
+    const observed = assembleObservations(
+      [...this.observationSources(now), this.applied],
+      { now }, { now, maxCount: 3 },
+    );
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["body_then_world", "accumulation"],
@@ -175,7 +179,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
     }
     if (typeof r2.parsed.restore === "string" && r2.parsed.restore) {
       this.snaps.restore(r2.parsed.restore as string);
-      this.applied = [];
+      this.applied.clear();
     }
     const stripped = r2.stripped !== botMessage.content ? r2.stripped : null;
     return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));

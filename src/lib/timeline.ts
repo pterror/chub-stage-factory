@@ -35,7 +35,7 @@
  *   interface TimelineObservationOptions<E>
  *     { id?, channels?, channel?, key?, windowSize?, saliencePer?,
  *       habituationTau?, render? }
- *   class Timeline<E> implements ObservationSource<unknown>
+ *   class Timeline<E> implements ObservationSource<any>  // ignores state
  *     constructor(opts?: TimelineObservationOptions<E>)
  *     push(payload, at?): TimelineEvent<E>
  *     pushAll(events: Iterable<TimelineEvent<E>>): void
@@ -84,14 +84,20 @@ export interface TimelineObservationOptions<E> {
   render?: (event: TimelineEvent<E>) => unknown;
 }
 
-export class Timeline<E> implements ObservationSource<unknown> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export class Timeline<E> implements ObservationSource<any> {
   private readonly events: TimelineEvent<E>[] = [];
 
   readonly id: string;
   readonly channels: Channel[];
   readonly habituationTau?: number;
-  readonly salience: Evaluator<unknown, number>;
-  readonly properties: Record<Channel, Record<Key, Evaluator<unknown>>>;
+  // Use `any` for the state slot: timeline evaluators ignore state, so a
+  // Timeline drops into any sources list without forcing the array's S
+  // wider than the rest of its members.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly salience: Evaluator<any, number>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  readonly properties: Record<Channel, Record<Key, Evaluator<any>>>;
 
   constructor(opts: TimelineObservationOptions<E> = {}) {
     this.id = opts.id ?? "timeline";
@@ -107,7 +113,8 @@ export class Timeline<E> implements ObservationSource<unknown> {
     this.salience = () =>
       saliencePer <= 0 ? (this.events.length > 0 ? 1 : 0) : Math.min(1, this.events.length / saliencePer);
 
-    const props: Record<Channel, Record<Key, Evaluator<unknown>>> = {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const props: Record<Channel, Record<Key, Evaluator<any>>> = {};
     for (const ch of this.channels) props[ch] = {};
     props[channel] = props[channel] ?? {};
     props[channel][key] = () => {

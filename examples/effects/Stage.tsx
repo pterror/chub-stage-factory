@@ -20,6 +20,7 @@ import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { EffectDef, EffectStore, EffectMagnitudes } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
 import { Scheduler } from "../../src/lib/scheduler";
+import { Timeline, summarize } from "../../src/lib/timeline";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
@@ -62,7 +63,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
   store = new EffectStore();
   scheduler = new Scheduler<{ store: EffectStore }>({ store: this.store });
   tick = { n: 0 };
-  events: string[] = [];
+  events = new Timeline<string>({ id: "tincture-events", channels: ["interoceptive"], windowSize: 20, habituationTau: 2 });
   layers = createChubLayers();
   pStore!: PersistenceStore;
   bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
@@ -118,9 +119,12 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
     this.tick.n += 1;
     const now = this.tick.n;
     const expired = this.store.tick(now);
-    for (const e of expired) this.events.push(`expired:${e.id}@${now}`);
+    for (const e of expired) this.events.push(`expired:${e.id}`, now);
 
-    const observed = assembleObservations(this.observationSources(now), { now }, { now, maxCount: 3 });
+    const observed = assembleObservations(
+      [...this.observationSources(now), this.events],
+      { now }, { now, maxCount: 3 },
+    );
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["focus_hold", "body_then_world"],
@@ -142,12 +146,12 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
     const tincture = applyId ? TINCTURES.get(applyId) : undefined;
     if (tincture) {
       this.store.apply(tincture, now);
-      this.events.push(`applied:${applyId}@${now}`);
+      this.events.push(`applied:${applyId}`, now);
     }
     const dispelTag = typeof r2.parsed.dispel === "string" ? (r2.parsed.dispel as string).trim() : "";
     if (dispelTag) {
       const dispelled = this.store.dispelByTag(dispelTag);
-      for (const d of dispelled) this.events.push(`dispelled:${d.id}@${now}`);
+      for (const d of dispelled) this.events.push(`dispelled:${d.id}`, now);
     }
     const stripped = r2.stripped !== botMessage.content ? r2.stripped : null;
     return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
@@ -175,7 +179,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
         )}
         <h4>Recent events</h4>
         <pre style={{ background: "#000", padding: 8, maxHeight: 200, overflow: "auto" }}>
-{this.events.slice(-20).join("\n") || "—"}
+{summarize(this.events.window(20), (e, at) => `${e}@${at}`) || "—"}
         </pre>
       </div>
     );
