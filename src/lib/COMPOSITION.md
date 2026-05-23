@@ -92,3 +92,32 @@ When the temptation arises to bake logic into a pattern, the right move is alway
 ## Status
 
 This positioning is current as of 2026-05-23; the patterns layer (`src/lib/patterns/`) is not yet implemented. Adoption plan tracked in repository `TODO.md`.
+
+---
+
+## The "imagine X, but infinite" pitch
+
+The library's external value proposition compresses to one line:
+
+> Imagine [classic game], but infinite.
+
+That framing is the audience-facing version of the technical achievement. Content-bounded classics become content-unbounded shapes-of-classics, delivered as chub stages whose worlds, characters, and content are generated on demand from LLM + procgen rather than authored once.
+
+Canonical applications:
+
+- *Imagine TiTS, but infinite.* — every chat is a new universe of planets, encounters, species, scenes.
+- *Imagine Corruption of Champions, but infinite.* — every playthrough is a different Mareth with different threats and different transformations.
+- *Imagine Free Cities, but infinite.* — every arcology has unique slaves, unique events, unique trade arcs.
+- *Imagine Zork, but infinite.* — every chat is a new underground, fresh puzzles, the LLM doing the prose work.
+- *Imagine Lilith's Throne, but infinite.* — every chat is a new city, fresh factions, NPCs that didn't exist before you started.
+- *Imagine Flexible Survival, but infinite.* — every chat is a new outbreak, new infection vectors, new survivors.
+- *Imagine Hitchhiker's Guide, but infinite.* — every chat is a different absurdist universe with the same comic register.
+
+This pitch determines design priorities. Specifically:
+
+1. **The synthesis primitives are load-bearing**, not a nice-to-have axis. Procgen + cached LLM generation + canon persistence is literally what makes the word "infinite" honest. Everything else is necessary substrate.
+2. **Each example stage ships under its "infinite X" framing** in its `chub_meta.yaml` tagline and `README.md`. Authors browsing Chub see "infinite TiTS" and click; they see "primitives library demo stage" and don't.
+3. **The patterns layer takes the same naming** — composer files document themselves as "infinite [shape]" recipes. The shape patterns (e.g. `spaceExplorationPattern`, `arcologyManagerialPattern`) compose into named example deployments that get the "infinite" branding at the example level.
+4. **Replay-value-via-procgen-seed is unique to this approach.** Static stages cannot promise this. Most LLM-heavy stages cannot either, because they lack the mechanical scaffolding to keep generated content coherent across a chat. The library's primitives are exactly that scaffolding.
+
+When designing a primitive or rewriting an example, the test is: **does this make "infinite X" more credible, or just more elaborate?** Credibility is the entire pitch; elaboration without credibility is the failure mode the library has to avoid.
