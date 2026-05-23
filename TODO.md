@@ -1,5 +1,17 @@
 # TODO
 
+## PlaceholderRegistry — live-LLM verification gap
+
+`examples/composite-showcase` ships a PlaceholderRegistry demo: the
+player emits `<invent>head|torso</invent>`, the stage registers a
+placeholder MOD and fires `generator.textGen` to fabricate the real
+EquipmentDef, then calls `MODS.replace(id, def)`. Static typecheck
+and `build-all-examples` are green. The end-to-end loop (placeholder
+appears in available_equip with `pending=true` next turn; replaced
+with the real def after the textGen returns; equip works against the
+freshly invented mod) needs on-platform verification — the dev
+TestStageRunner does not simulate the Chub generator service.
+
 ## Persistence — open verification gap
 
 The dev TestRunner (`src/TestRunner.tsx`) runs a stage in isolation and
