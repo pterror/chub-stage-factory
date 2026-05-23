@@ -1,0 +1,4 @@
+name: "Cull's clinic"
+characters:
+  - '@characters/cull.yaml'
+scenario: "Back-alley ripperdoc clinic; chrome table, smell of solder, one chair for the patient."

@@ -1,0 +1,14 @@
+project_name: "Dr. Cull the Ripperdoc"
+tagline: "Cyberware constraints interop with body TF via tags."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags: ['Stage', 'Example', 'Cyberpunk', 'Equipment']
+config_schema: { type: object, properties: {} }
+state_schema:
+  init: { type: object, properties: {} }
+  message:
+    type: object
+    properties:
+      ticks: { type: integer, default: 0 }
+      lastAction: { type: string }
+  chat: { type: object, properties: {} }

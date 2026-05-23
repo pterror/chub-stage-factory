@@ -19,6 +19,8 @@ import { TurnCombatStage } from "./turn-combat/Stage";
 import turnCombatInit from "./turn-combat/test-init.json";
 import { TitsBodyStage } from "./tits-body/Stage";
 import titsBodyInit from "./tits-body/test-init.json";
+import { CyberSlotsStage } from "./cyber-slots/Stage";
+import cyberSlotsInit from "./cyber-slots/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -63,6 +65,14 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: ["body", "transformation", "tags", "snapshots", "observation"],
     factory: (d) => new TitsBodyStage(d),
     testInit: titsBodyInit,
+  },
+  {
+    name: "cyber-slots",
+    label: "Cyber-slots — Dr. Cull the ripperdoc",
+    description: "Equipment×TF tag interop; violations surfaced, not auto-resolved.",
+    primitives: ["equipment", "body", "transformation", "constraints", "observation"],
+    factory: (d) => new CyberSlotsStage(d),
+    testInit: cyberSlotsInit,
   },
 ];
 
