@@ -91,6 +91,16 @@ engine; the stage is the world model.
 Anti-example: the stage assembling `"You are starving and your left hand is cold and..."` and
 appending it to `stageDirections`. The LLM is now competing with prose, not generating it.
 
+## Wave 1 primitives (universal shared foundation)
+
+Required by every Wave 3 example. All three are dependency-free of each other.
+
+| File | Exports | Description |
+|------|---------|-------------|
+| `actor.ts` | `Actor`, `ActorPool` | Bundled entity primitive. Body + Inventory + Stats + Location + Owner + Affinity + Tags. Bulk-first design (FC-shape scales). |
+| `procgen.ts` | `weightedPick`, `buildGraph`, `buildGrid`, `instantiate`, nameHelpers | Deterministic procgen helpers over `rng`. Weighted tables, topology generators (`buildGraph`, `buildGrid`), template instantiation with tagged-union `FieldSpec`, name/id helpers. |
+| `generate.ts` | `generate`, `generativeRegistry` | LLM-call primitive with schema validation + retry-with-augmented-prompt + optional caching via `PlaceholderRegistry`. Convenience `generativeRegistry(...)` wraps `PlaceholderRegistry` for "LLM-on-demand catalog" pattern. |
+
 ## What the library deliberately is NOT
 
 - Not a framework. No required base class beyond `StageBase` (which the SDK requires anyway).

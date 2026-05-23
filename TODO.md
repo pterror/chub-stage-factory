@@ -1,5 +1,26 @@
 # TODO
 
+## HIGH PRIORITY — Forward designs to Crescent
+
+Once the patterns layer is polished (post-Wave 2D minimum; ideally post-Waves 2E/F/G/H), evaluate forwarding the primitives + patterns + persistence model + COMPOSITION.md framings to `~/git/rhizone/crescent/` (Crescent is the LuaJIT ecosystem; the patterns are language-agnostic and the design intent for a "roleplay frontend that is just good" extends beyond chub-stage-factory).
+
+What likely ports:
+- The patterns catalog (composers are conceptual, easily re-expressed in Lua)
+- The persistence model (tree-history + shards + reincarnate-derived design)
+- The composable-context-construction primitive shape
+- The single-shot / chat-poisoning north star
+- The decision-audit reductions (Faction, ConfigSlots etc.)
+
+What stays chub-specific:
+- StageBase lifecycle binding
+- React UI primitives (would need Lua-equivalent UI surface)
+- Chub-host-specific persistence backend impls
+
+## Wave 1 follow-ups
+
+- **Investigate centralising `statTiers` on `ActorPool`** — currently `ActorDeps.statTiers` is a `Record<string, TierFn>` keyed by stat name, repeated at every `ActorPool.fromJSON` site. A constructor option holding the same map and propagating into fromJSON would centralize it. Defer the redesign until Wave 3 dogfooding pressure surfaces it as friction.
+- **Generative-registry live-LLM verification gap** — Wave 3 examples must exercise `generativeRegistry` end-to-end against live Chub `textGen` to validate the retry-with-augmented-prompt loop. Sibling to the existing `PlaceholderRegistry` live-LLM verification gap.
+
 ## PlaceholderRegistry — live-LLM verification gap
 
 `examples/composite-showcase` ships a PlaceholderRegistry demo: the

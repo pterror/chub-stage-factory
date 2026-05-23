@@ -354,6 +354,81 @@ tickWorld(dt: number, now: number) {
 
 ---
 
+## 8. bulkTick over ActorPool (Wave 2C preview)
+
+Composes `ActorPool` + `Scheduler` + `Timeline`. Foundation for FC-shape weekly tick.
+
+```ts
+import { ActorPool } from "./lib/actor";
+import { Scheduler } from "./lib/scheduler";
+import { Timeline } from "./lib/timeline";
+
+pool: ActorPool;
+scheduler: Scheduler;
+timeline = new Timeline<ActorEvent>();
+
+tickWeek(now: number) {
+  const events: ActorEvent[] = [];
+  this.actorPool.forEach(actor => {
+    const actorEvents = actor.tick(now);
+    events.push(...actorEvents);
+  });
+  for (const evt of events) {
+    this.timeline.append(evt, now);
+  }
+  return events;
+}
+```
+
+When to use: any managerial stage where N actors advance simultaneously per turn (FC-shape arcology, LT-shape city, FS-shape outbreak simulation). `timeline` then feeds the LLM as an `ObservationSource` summarizing what happened this tick.
+
+---
+
+## 9. generativeRegistry — "LLM-on-demand catalog"
+
+Wrap `PlaceholderRegistry<T>` with `generate.ts`'s `generativeRegistry` helper. Placeholders register immediately so gameplay continues; real defs swap in async. Used for stages where the LLM invents new content mid-chat (cyberware in composite-showcase, frames in Warframe-shape, encounters in CoC-shape).
+
+```ts
+import { generativeRegistry } from "./lib/generate";
+
+// On stage init:
+const MODS = generativeRegistry<EquipmentDef>({
+  generate: (id, hint) => textGen({ prompt: `Invent a cyberware mod: ${hint}`, schema: EquipmentDefSchema }),
+  placeholder: (id) => ({ id, slot: "head", constraints: [], grantsTags: [], pending: true }),
+  shard: shard("mods", ...),
+});
+
+// During gameplay, player emits <invent>deckjack|neural</invent>:
+MODS.registerPlaceholder("deckjack", { hint: "neural" }); // immediately visible, pending=true
+// textGen fires async; on completion:
+// MODS.replace("deckjack", realDef);   — next turn the real def is live
+```
+
+When to use: anywhere content is invented mid-session and must be consistent on revisit. The "LLM invents it once, serves it forever" pattern. Pairs with `synergy/cache-by-key.ts`.
+
+---
+
+## 10. buildGraph for room / faction / lineage networks
+
+`procgen.buildGraph(...)` produces a topology usable for room graphs (Wave 2B `world.ts`), faction relationships (LT-shape), and family lineages (FC-shape). Same primitive, three semantic interpretations.
+
+```ts
+import { buildGraph } from "./lib/procgen";
+
+// Room graph (Wave 2B):
+const roomGraph = buildGraph({ nodeCount: 12, connectivity: "sparse", constraints: { maxDegree: 4 } });
+
+// Faction relationship graph (LT-shape):
+const factionGraph = buildGraph({ nodeCount: 6, connectivity: "mesh", constraints: { symmetric: true } });
+
+// Family lineage (FC-shape):
+const lineage = buildGraph({ nodeCount: 20, connectivity: "tree" });
+```
+
+`buildGraph` returns `{ nodes: NodeId[], edges: [NodeId, NodeId][] }`. The stage assigns semantic meaning to nodes (rooms, factions, persons). The same topology primitives handle all three because graph structure is provenance-neutral.
+
+---
+
 ## 7. Physics
 
 For "did the bullet hit the wall" / "can the player move here" / soft-body

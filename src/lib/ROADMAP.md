@@ -19,10 +19,12 @@ This doc is forward-looking. As waves ship, move completed items from upcoming s
 2. Composition strictly dominates monolithic frameworks. Every "thing" is either a primitive or a pattern.
 3. Supply-driven, not demand-driven. "Deferred until a use case" is invalid library reasoning.
 4. Provenance-neutral primitives, synergy-rich patterns. Procgen + LLM compose without prescription.
+5. LLMs are single-shot; naive chat accumulation is context poisoning. World state is the durable substrate; distant chat summarizes into state, not raw text.
+6. Composable context construction; the stage author never `string +`s a prompt. `ContextAssembler` + `ContextContributor` is the prompt-assembly model.
 
 Two design rules surfaced during the Warframe-shape discussion:
 
-5. **Configuration is additive, never subtractive.** Saving a build never costs you another build. Switching configurations is mechanically free by default. If a stage wants to impose currency / cooldown / narrative friction on customization, it does so explicitly; the library never imposes it.
+7. **Configuration is additive, never subtractive.** Saving a build never costs you another build. Switching configurations is mechanically free by default. If a stage wants to impose currency / cooldown / narrative friction on customization, it does so explicitly; the library never imposes it.
 6. **Named-in-source-game ≠ earns-a-primitive.** Things have names in the games we're modeling (`Faction`, `Module`, `Skit`, `Form`, `ConfigSlots`); that does not mean each gets a primitive slot. The reduction test always applies.
 
 ## Shipping catalog — 16 game-shape examples
@@ -259,6 +261,53 @@ These are the genuinely novel content. Each is a small composer (~30 LOC) plus a
 - `synergy/fallback-chain.ts` — deterministic grammar tries first; LLM fallback on parse miss; LLM-with-broader-context on second miss. Used for intent parsing where determinism is preferred but graceful degradation is needed.
 - `synergy/seed-from-player.ts` — LLM extracts a seed/spec from the player's free-form input; procgen elaborates from the seed. Used for player-as-author flows.
 - `synergy/hierarchical-summarization.ts` — for FC-scale stages: per-actor mini-reports first, then aggregate. Avoids 50k-token prompts. Composes with `Timeline.summarize`.
+- `synergy/sliding-window-chat.ts` — pairs the chatWindow primitive (when shipped) with Timeline so that as turns age out of the bounded verbatim window, their relevant content is captured as Timeline events (via tag-parser extraction or LLM summarization). Information persists; verbatim text doesn't. Defaults to a 5–10 turn window; crossing the window forces summarization. The "I want a 200-turn raw history" path requires explicit author opt-in plus a warning in the pattern doc about what it costs.
+
+### Wave 2I — context curation primitives
+
+- **`src/lib/chat-window.ts`** — bounded recent-turns window. Tracks last N turns verbatim; provides `summarizeOlder` hook for turns rolling out. Implements `ContextContributor` (see below). Tiny primitive (~80 LOC).
+- **`src/lib/context.ts`** — composable context construction. The load-bearing prompt-assembly primitive. ~250 LOC.
+
+```ts
+interface ContextContributor {
+  id: string;
+  priority: number;                             // higher = more critical; first to allocate budget
+  contribute(ctx: AssemblyContext): Section | null;
+}
+
+interface Section {
+  id: string;
+  content: string;
+  tokens: number;                               // estimated
+  optional?: boolean;                           // droppable under budget pressure
+}
+
+interface AssemblyContext {
+  budget: number;
+  turnInputMessage?: Message;
+  stage: unknown;
+}
+
+class ContextAssembler {
+  contributors: ContextContributor[];
+  budget: number;
+  register(c: ContextContributor): void;
+  assemble(ctx: AssemblyContext): string;       // priority-allocates; drops optional first under pressure
+}
+```
+
+Built-in contributors shipped alongside:
+- `observationContributor(sources)` — wraps `ObservationSource[]`
+- `timelineContributor(timeline, window)` — recent events as summarized text
+- `chatWindowContributor(window)` — last N turns verbatim
+- `worldStateContributor(world)` (post-Wave 2B)
+- `proseRegisterContributor(spec)` — architecture hints
+- `systemInstructionsContributor(text)` — stage-author static instructions
+- `turnInputContributor()` — the just-received player message
+
+Stages compose contributors via `register`. The assembler handles priority allocation, optional-section drop ordering under budget pressure, deduplication. All existing primitives that produce prompt-bound text (observation, Timeline, prose-register) will gain `ContextContributor` implementations in their Wave 2I update.
+
+Genuinely best-in-class versus existing prompt-engineering frameworks (LangChain templates, LlamaIndex) which are template-based (string-with-placeholders, fill them). Contributor model is more flexible because each contributor knows what it's contributing AND can adjust based on remaining budget.
 
 ## Decision audit — things ruled out
 

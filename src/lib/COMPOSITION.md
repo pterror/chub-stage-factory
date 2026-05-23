@@ -121,3 +121,35 @@ This pitch determines design priorities. Specifically:
 4. **Replay-value-via-procgen-seed is unique to this approach.** Static stages cannot promise this. Most LLM-heavy stages cannot either, because they lack the mechanical scaffolding to keep generated content coherent across a chat. The library's primitives are exactly that scaffolding.
 
 When designing a primitive or rewriting an example, the test is: **does this make "infinite X" more credible, or just more elaborate?** Credibility is the entire pitch; elaboration without credibility is the failure mode the library has to avoid.
+
+---
+
+## LLMs are single-shot; naive chat accumulation is context poisoning
+
+LLM calls are one prompt → one response. The "conversation" UI metaphor is a fiction layered on top — each turn assembles a fresh prompt that includes prior turns. The failure mode the library routes around is **unreflective accumulation**: blindly appending each turn to the previous, which drags in old hallucinations, mistakes, awkward beats, and irrelevant text that degrade quality over time. (This IS why long Chub/SillyTavern/AI Dungeon chats degrade — the prompt becomes junk.)
+
+Recent turns are valid stylistic-continuity input. Distant turns are not handed back verbatim — they are summarized into Timeline events, observation updates, or other structured state and dropped from raw text.
+
+The library treats world state as the durable substrate, a **bounded recent-turns window** as valid input, and distant chat as something to summarize-into-state rather than retain verbatim. The chat log is a derived view that the library curates back into the next prompt, never just blindly accumulates.
+
+---
+
+## Composable context construction; the stage author never `string +`s a prompt
+
+Every primitive that contributes to prompts implements `ContextContributor`. Prompts are assembled by `ContextAssembler` from a registered set of contributors, with explicit priority + token-budget + drop-on-overflow ordering. The stage author composes contributors; the assembler emits the final text. The "string-concatenate-everything" path is not a mode the library exposes.
+
+This makes "naive chat append" literally not a thing one writes — the assembler doesn't have that mode. Every observation, Timeline, chatWindow, prose-register, etc. participates as a contributor with declared priority and budget.
+
+---
+
+## Beyond chub-stage-factory: a roleplay frontend that is just good
+
+The end goal extends past chub-stage-factory itself. Chub/SillyTavern/AI Dungeon's chat-log-as-substrate model is the failure pattern this library actively routes around. A great roleplay frontend treats:
+
+- World state as primary
+- Narration as a derived feed produced from state, not as state itself
+- The LLM as a fresh-prompt single-shot renderer driven by structured context
+- Structured user input (commands, choices, free-form intent that gets parsed) as the player's primary interaction surface
+- The chat log as a side-panel view, not the main interface
+
+Chub-stage-factory is one expression of this vision. The design intent extends to other substrates — likely portable to Crescent's LuaJIT ecosystem (`~/git/rhizone/crescent/`) once the patterns layer is polished. See `TODO.md` for the forwarding entry.
