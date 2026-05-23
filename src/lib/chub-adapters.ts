@@ -25,6 +25,17 @@ import { AssembledObservation, formatObservations } from "./observation";
 import { ArchitectureName, RegisterSpec, RegisterPreset, proseInstructions } from "./prose-register";
 import { ParseResult, Schema, parseTags } from "./tag-parser";
 
+// Re-export the persistence-layer Chub bindings so stages can import
+// the entire persistence story from one place if they prefer.
+export {
+  chubTreeHistory,
+  createChubLayers,
+  bindStore,
+  mergeResponses,
+  shard,
+} from "./persistence";
+export type { BoundStore, BindStoreOptions } from "./persistence";
+
 export interface HookCtx<C, M> {
   /** Mutable state object the stage hands the hooks. */
   state: M;

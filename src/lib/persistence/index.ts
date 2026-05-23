@@ -32,3 +32,12 @@ export {
 
 export type { SaveableState, Shard } from "./store";
 export { asSaveable, PersistenceStore } from "./store";
+
+export type { BindStoreOptions, BoundStore } from "./chub";
+export {
+  chubTreeHistory,
+  createChubLayers,
+  bindStore,
+  mergeResponses,
+  shard,
+} from "./chub";
