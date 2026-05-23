@@ -1,0 +1,29 @@
+project_name: "Pak the Pack-Rat Shopkeeper"
+tagline: "Spot-based inventory with carry-class and disorder. Pak knows where everything is."
+creator_notes: "Reference stage for the chub-stage-factory inventory primitive."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags:
+  - 'Stage'
+  - 'Example'
+  - 'Inventory'
+
+config_schema:
+  type: object
+  properties: {}
+
+state_schema:
+  init:
+    type: object
+    properties: {}
+  message:
+    type: object
+    properties:
+      ticks:
+        type: integer
+        default: 0
+      lastTakenDefId:
+        type: string
+  chat:
+    type: object
+    properties: {}

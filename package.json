@@ -11,7 +11,11 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "vite",
+    "dev:example": "VITE_EXAMPLE=$EXAMPLE vite",
     "build": "tsc && vite build",
+    "build:example": "tsc && node scripts/build-example.mjs",
+    "build:examples": "tsc && node scripts/build-all-examples.mjs",
+    "deploy:example": "node scripts/deploy-example.mjs",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },

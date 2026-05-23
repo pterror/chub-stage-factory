@@ -1,0 +1,4 @@
+name: "Pak's stall"
+characters:
+  - '@characters/pak.yaml'
+scenario: "A rain-slicked night market; Pak's stall is the dim one with the brass compass on the counter."

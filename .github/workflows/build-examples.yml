@@ -1,0 +1,37 @@
+name: Build Examples (verify)
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+
+jobs:
+  list-examples:
+    runs-on: ubuntu-latest
+    outputs:
+      names: ${{ steps.enum.outputs.names }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: enum
+        run: |
+          names=$(ls -1 examples 2>/dev/null \
+            | while read d; do [ -f "examples/$d/Stage.tsx" ] && echo "$d"; done \
+            | jq -R -s -c 'split("\n") | map(select(length>0))')
+          echo "names=$names" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: list-examples
+    runs-on: ubuntu-latest
+    if: needs.list-examples.outputs.names != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        name: ${{ fromJSON(needs.list-examples.outputs.names) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "21.7.1"
+      - run: yarn install --frozen-lockfile || yarn install
+      - run: node scripts/build-example.mjs ${{ matrix.name }}
