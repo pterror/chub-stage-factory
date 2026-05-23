@@ -68,6 +68,18 @@ Reach for raw `StageBase` only when no primitive fits — the philosophy doc
 also bound when a new primitive is warranted versus when ad-hoc stage code
 should remain ad-hoc.
 
+### Reference examples — `examples/`
+
+For each recipe in `PATTERNS.md` there is a working, production-deployable
+stage under `examples/<name>/` composing the relevant primitives. When the
+design overlaps an example, open it and read its `Stage.tsx` alongside the
+recipe — the example is the recipe with the realistic edges filled in
+(constraints between systems, observation source shapes, tag schemas the
+LLM has to follow). See `examples/README.md` for the index.
+
+The autonomous loop should NOT edit `examples/*`; they are reference
+material. New stages live in `src/Stage.tsx` as usual.
+
 ### Three state layers — pick correctly
 
 | Layer | Lifetime | Use for |

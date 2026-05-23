@@ -20,6 +20,23 @@ nix develop                  # node 21 + yarn
 
 See `CLAUDE.md` for the full workflow and behavioral rules.
 
+## Reference examples
+
+`examples/` ships 8 working stages — one per recipe in
+`src/lib/PATTERNS.md` plus a composite cyberpunk-clinic that combines
+most primitives. Browse them under `yarn dev` (a picker UI lists every
+example plus your own `src/Stage.tsx`). Each is independently buildable
+and deployable to Chub:
+
+```bash
+node scripts/build-example.mjs <name>            # build one
+node scripts/build-all-examples.mjs              # build all
+STAGE_ID_<NAME_UPPER>=… CHUB_AUTH_TOKEN=… \
+  node scripts/deploy-example.mjs <name>         # deploy one
+```
+
+See `examples/README.md` for the index.
+
 ## References
 
 - Chub stages docs: <https://docs.chub.ai/docs/stages>
