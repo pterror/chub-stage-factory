@@ -1,0 +1,16 @@
+project_name: "Duel on the Steps"
+tagline: "Initiative-ordered turn combat with action choice via tags."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags: ['Stage', 'Example', 'Combat', 'Turn-based']
+config_schema: { type: object, properties: {} }
+state_schema:
+  init: { type: object, properties: {} }
+  message:
+    type: object
+    properties:
+      round: { type: integer, default: 0 }
+      pcHp: { type: integer, default: 30 }
+      enemyHp: { type: integer, default: 22 }
+      ended: { type: string }
+  chat: { type: object, properties: {} }

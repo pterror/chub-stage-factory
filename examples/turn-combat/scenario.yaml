@@ -1,0 +1,4 @@
+name: "Temple steps"
+characters:
+  - '@characters/duellist.yaml'
+scenario: "A duel on the temple steps at sunrise. One challenger, one defender."

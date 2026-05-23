@@ -15,6 +15,8 @@ import { InventoryStage } from "./inventory/Stage";
 import inventoryInit from "./inventory/test-init.json";
 import { EffectsStage } from "./effects/Stage";
 import effectsInit from "./effects/test-init.json";
+import { TurnCombatStage } from "./turn-combat/Stage";
+import turnCombatInit from "./turn-combat/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -43,6 +45,14 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: ["effects", "stats", "scheduler", "tag-parser", "chub-adapters"],
     factory: (d) => new EffectsStage(d),
     testInit: effectsInit,
+  },
+  {
+    name: "turn-combat",
+    label: "Turn combat — duel on the steps",
+    description: "Initiative-ordered rounds + damage pipeline.",
+    primitives: ["action", "combat-turn", "effects", "stats", "rng", "tag-parser"],
+    factory: (d) => new TurnCombatStage(d),
+    testInit: turnCombatInit,
   },
 ];
 
