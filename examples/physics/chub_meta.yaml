@@ -1,0 +1,13 @@
+project_name: "Mara's Atelier (Physics Sandbox)"
+tagline: "AABB collision sandbox; throw objects, see what they hit."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags: ['Stage', 'Example', 'Physics', 'Sandbox']
+config_schema: { type: object, properties: {} }
+state_schema:
+  init: { type: object, properties: {} }
+  message:
+    type: object
+    properties:
+      ticks: { type: integer, default: 0 }
+  chat: { type: object, properties: {} }

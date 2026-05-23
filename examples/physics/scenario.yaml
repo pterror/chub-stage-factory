@@ -1,0 +1,4 @@
+name: "Mara's atelier"
+characters:
+  - '@characters/mara.yaml'
+scenario: "Mara's open studio. A workbench in the middle, a low shelf, a pillar near the far wall."

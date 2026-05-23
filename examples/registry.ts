@@ -21,6 +21,8 @@ import { TitsBodyStage } from "./tits-body/Stage";
 import titsBodyInit from "./tits-body/test-init.json";
 import { CyberSlotsStage } from "./cyber-slots/Stage";
 import cyberSlotsInit from "./cyber-slots/test-init.json";
+import { PhysicsStage } from "./physics/Stage";
+import physicsInit from "./physics/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -73,6 +75,14 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: ["equipment", "body", "transformation", "constraints", "observation"],
     factory: (d) => new CyberSlotsStage(d),
     testInit: cyberSlotsInit,
+  },
+  {
+    name: "physics",
+    label: "Physics — throw-objects sandbox",
+    description: "AABB / SpatialHash / resolvePositional with bouncing projectile.",
+    primitives: ["physics", "rng", "observation"],
+    factory: (d) => new PhysicsStage(d),
+    testInit: physicsInit,
   },
 ];
 
