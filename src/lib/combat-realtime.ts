@@ -19,12 +19,15 @@
  *   interface AttackDef { id; shape: "circle" | "aabb" | "segment";
  *     duration; pierces?; effects: EffectDef[]; hitFilter?: (owner, target) => bool }
  *   interface Attack { id; def; owner; bounds; vel?; bornAt; hits: Set<id> }
+ *   interface ArenaBounds { minX, maxX, minY, maxY }
  *   class RealtimeWorld
- *     constructor(cellSize=64)
+ *     constructor(cellSize=64, bounds?)
  *     combatants: Map<id, RealtimeCombatant>
  *     attacks: Attack[]
  *     spawnAttack(def, owner, initial): Attack
  *     tick(dt, now): RealtimeEvent[]
+ *       — combatants clamped to bounds (no cull)
+ *       — attacks outside bounds culled and emit 'out-of-bounds' event
  */
 
 import { EffectDef } from "./effects";
@@ -66,16 +69,26 @@ export type RealtimeEvent =
   | { kind: "attack_spawned"; attackId: string; owner: string }
   | { kind: "attack_hit"; attackId: string; target: string; damage: number }
   | { kind: "attack_expired"; attackId: string }
-  | { kind: "downed"; combatant: string };
+  | { kind: "downed"; combatant: string }
+  | { kind: "out-of-bounds"; attackId: string };
+
+export interface ArenaBounds {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
 
 export class RealtimeWorld {
   combatants: Map<string, RealtimeCombatant> = new Map();
   attacks: Attack[] = [];
   private _hash: SpatialHash<RealtimeCombatant>;
   private _attackSeq = 0;
+  bounds?: ArenaBounds;
 
-  constructor(public cellSize = 64) {
+  constructor(public cellSize = 64, bounds?: ArenaBounds) {
     this._hash = new SpatialHash<RealtimeCombatant>(cellSize);
+    this.bounds = bounds;
   }
 
   add(c: RealtimeCombatant): void {
@@ -104,11 +117,15 @@ export class RealtimeWorld {
   tick(dt: number, now: number): RealtimeEvent[] {
     const events: RealtimeEvent[] = [];
 
-    // 1. Integrate combatants.
+    // 1. Integrate combatants; clamp to bounds when set.
     for (const c of this.combatants.values()) {
       const from = { x: c.pos.x, y: c.pos.y };
       c.pos.x += c.vel.x * dt;
       c.pos.y += c.vel.y * dt;
+      if (this.bounds) {
+        c.pos.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, c.pos.x));
+        c.pos.y = Math.max(this.bounds.minY, Math.min(this.bounds.maxY, c.pos.y));
+      }
       if (from.x !== c.pos.x || from.y !== c.pos.y)
         events.push({ kind: "moved", combatant: c.id, from, to: { x: c.pos.x, y: c.pos.y } });
     }
@@ -155,11 +172,34 @@ export class RealtimeWorld {
       }
 
       const age = now - a.bornAt;
+      // Cull attacks outside bounds before checking expiry.
+      if (this.bounds && this._attackOutOfBounds(a)) {
+        events.push({ kind: "out-of-bounds", attackId: a.id });
+        continue;
+      }
       if (age >= a.def.duration || hitsLeft <= 0) events.push({ kind: "attack_expired", attackId: a.id });
       else surviving.push(a);
     }
     this.attacks = surviving;
     return events;
+  }
+
+  private _attackOutOfBounds(a: Attack): boolean {
+    if (!this.bounds) return false;
+    const { minX, maxX, minY, maxY } = this.bounds;
+    if (a.bounds.circle) {
+      const { x, y } = a.bounds.circle;
+      return x < minX || x > maxX || y < minY || y > maxY;
+    }
+    if (a.bounds.aabb) {
+      const { x, y } = a.bounds.aabb;
+      return x > maxX || x + a.bounds.aabb.w < minX || y > maxY || y + a.bounds.aabb.h < minY;
+    }
+    if (a.bounds.segment) {
+      const { x1, x2, y1, y2 } = a.bounds.segment;
+      return Math.min(x1, x2) > maxX || Math.max(x1, x2) < minX || Math.min(y1, y2) > maxY || Math.max(y1, y2) < minY;
+    }
+    return false;
   }
 
   private _attackAabb(a: Attack): AABB {

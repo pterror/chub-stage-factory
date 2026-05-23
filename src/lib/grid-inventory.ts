@@ -25,6 +25,7 @@
  *     remove(idx): Placement | null
  *     occupancy(): bool[][]
  *     toJSON()
+ *     static fromJSON(data): GridInventory
  */
 
 export type Rot = 0 | 1 | 2 | 3;
@@ -130,5 +131,17 @@ export class GridInventory {
     const shapes: Record<string, boolean[][]> = {};
     for (const [k, v] of this._shapes) shapes[k] = v.map((r) => [...r]);
     return { width: this.width, height: this.height, shapes, placements: this.placements() };
+  }
+
+  static fromJSON(data: {
+    width: number;
+    height: number;
+    shapes: Record<string, boolean[][]>;
+    placements: Placement[];
+  }): GridInventory {
+    const g = new GridInventory(data.width, data.height);
+    for (const [k, v] of Object.entries(data.shapes)) g.setShape(k, v);
+    for (const p of data.placements) g._placements.push({ ...p });
+    return g;
   }
 }

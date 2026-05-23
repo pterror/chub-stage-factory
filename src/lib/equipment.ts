@@ -31,6 +31,8 @@
  *     checkAllConstraints(): Violation[]
  *     resolveViolations(): { unequipped, degraded, adapted, destroyed, prompted, custom }
  *     fit(slot, now): FitReport | null     // phase 6
+ *     toJSON(): { equipped: Record<slot, { defId, equippedAt, snapshotTags }> }
+ *     static fromJSON(data, body, defs): Loadout
  */
 
 import { Body } from "./body";
@@ -206,6 +208,35 @@ export class Loadout {
     const inst = this._equipped.get(slot);
     if (!inst) return null;
     return fit(inst, this._body);
+  }
+
+  /**
+   * Serialize equipped instances. Def objects (functions) are not serialized;
+   * only the def id is stored. `fromJSON` requires the caller to supply the
+   * def catalog.
+   */
+  toJSON(): {
+    equipped: Record<string, { defId: string; equippedAt: number; snapshotTags: string[] }>;
+  } {
+    const equipped: Record<string, { defId: string; equippedAt: number; snapshotTags: string[] }> = {};
+    for (const [slot, inst] of this._equipped) {
+      equipped[slot] = { defId: inst.def.id, equippedAt: inst.equippedAt, snapshotTags: [...inst.snapshotTags] };
+    }
+    return { equipped };
+  }
+
+  static fromJSON(
+    data: { equipped: Record<string, { defId: string; equippedAt: number; snapshotTags: string[] }> },
+    body: Body,
+    defs: Record<string, EquipmentDef>,
+  ): Loadout {
+    const l = new Loadout(body);
+    for (const [slot, snap] of Object.entries(data.equipped)) {
+      const def = defs[snap.defId];
+      if (!def) continue;
+      l._equipped.set(slot, { def, equippedAt: snap.equippedAt, snapshotTags: [...snap.snapshotTags] });
+    }
+    return l;
   }
 
   resolveViolations(): ResolveResult {

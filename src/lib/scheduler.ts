@@ -21,6 +21,8 @@
  *     tickTo(now): ScheduledEvent[]   // returns drained events in fire order
  *     size(): number
  *     clear(): void
+ *     toJSON(): { pending: ScheduledEvent[] }
+ *     static fromJSON(data, state, handlers?): Scheduler<S>
  */
 
 export interface ScheduledEvent<T = unknown> {
@@ -59,6 +61,10 @@ class Heap {
       this._siftDown(0);
     }
     return top;
+  }
+  /** Return all events in insertion order (not heap order). Used for serialization only. */
+  all(): ScheduledEvent[] {
+    return this._arr.map((n) => n.ev);
   }
   clear(): void {
     this._arr = [];
@@ -137,5 +143,25 @@ export class Scheduler<S> {
       if (next) for (const n of next) this._heap.push(n);
     }
     return fired;
+  }
+
+  /** Serialize the pending event queue (handlers are not serialized). */
+  toJSON(): { pending: ScheduledEvent[] } {
+    return { pending: this._heap.all() };
+  }
+
+  /**
+   * Reconstruct a Scheduler from a snapshot. Handlers must be re-registered
+   * by the caller (they are functions and cannot be serialized).
+   */
+  static fromJSON<S>(
+    data: { pending: ScheduledEvent[] },
+    state: S,
+    handlers?: Map<string, Handler<S>>,
+  ): Scheduler<S> {
+    const s = new Scheduler<S>(state);
+    if (handlers) s._handlers = new Map(handlers);
+    for (const ev of data.pending) s._heap.push(ev);
+    return s;
   }
 }

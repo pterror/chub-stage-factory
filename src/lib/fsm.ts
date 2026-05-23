@@ -27,6 +27,8 @@
  *     stack(): string[]
  *     dispatch(event, data?): any[]   // returns concatenated `emit` from handlers
  *     reset(initial?): void
+ *     toJSON(): { initial, stack }
+ *     static fromJSON(data, ctx, states?): Fsm<C>
  */
 
 export interface TransitionObj<E = unknown> {
@@ -147,5 +149,25 @@ export class Fsm<C, E = unknown> {
 
   reset(initial?: string): void {
     this._stack = [initial ?? this._initial];
+  }
+
+  /** Serialize the stack + initial state. State defs (functions) are not serialized. */
+  toJSON(): { initial: string; stack: string[] } {
+    return { initial: this._initial, stack: [...this._stack] };
+  }
+
+  /**
+   * Reconstruct an Fsm from a snapshot. States must be re-registered via the
+   * `states` argument or via `defineState` after construction (they are not
+   * serializable).
+   */
+  static fromJSON<C, E = unknown>(
+    data: { initial: string; stack: string[] },
+    ctx: C,
+    states?: Record<string, StateDef<C, E>>,
+  ): Fsm<C, E> {
+    const fsm = new Fsm<C, E>(data.initial, ctx, states);
+    fsm._stack = [...data.stack];
+    return fsm;
   }
 }

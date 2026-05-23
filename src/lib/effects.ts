@@ -35,6 +35,8 @@
  *     magnitudesFor(id, now): EffectMagnitudes | null
  *     totalMagnitudes(now): EffectMagnitudes
  *     tick(now): EffectInstance[]  // returns expired
+ *     toJSON(): { instances: { id, startTime, count }[] }
+ *     static fromJSON(data, defs): EffectStore
  */
 
 export type StackingPolicy = "replace" | "extend" | "stack" | "highest";
@@ -182,6 +184,34 @@ export class EffectStore {
       }
     }
     return expired;
+  }
+
+  /**
+   * Serialize the active instances. `def` references are not serialized — they
+   * are authored data, not runtime state. `fromJSON` requires the caller to
+   * supply the def catalog so instances can be reconstructed.
+   */
+  toJSON(): { instances: { id: string; startTime: number; count: number }[] } {
+    return {
+      instances: [...this._active.values()].map((i) => ({
+        id: i.id,
+        startTime: i.startTime,
+        count: i.count,
+      })),
+    };
+  }
+
+  static fromJSON(
+    data: { instances: { id: string; startTime: number; count: number }[] },
+    defs: Record<string, EffectDef>,
+  ): EffectStore {
+    const store = new EffectStore();
+    for (const snap of data.instances) {
+      const def = defs[snap.id];
+      if (!def) continue; // unknown def — skip gracefully
+      store._active.set(snap.id, { id: snap.id, def, startTime: snap.startTime, count: snap.count });
+    }
+    return store;
   }
 }
 

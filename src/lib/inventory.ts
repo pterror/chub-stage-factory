@@ -23,10 +23,12 @@
  *   interface ItemDef {
  *     id; carryClass; portable; counted;
  *     defaultSpot?; channels?: string[]; size?: number; tags?: string[];
+ *     weight?: number; bulk?: number;
  *     displayName?; description?;
  *   }
  *   interface Stack { defId: string; count: number }
- *   interface SpotMeta { disorder: number; lastAccessed: number; capacity?: number }
+ *   interface SpotMeta { disorder: number; lastAccessed: number; capacity?: number;
+ *     weightCapacity?: number; bulkCapacity?: number }
  *   class Inventory
  *     register(def): this
  *     getDef(id): ItemDef | undefined
@@ -39,8 +41,11 @@
  *     find(defId): Array<{spot, count}>
  *     touch(spot, now): void
  *     accessibility(defId, spot, now): number  // higher = easier to reach
+ *     capacityOK(spot, itemDef, count=1): boolean
+ *     capacityViolation(spot, itemDef, count=1): {kind:'weight'|'bulk',overBy:number}|null
  *     resolveLeaveLocation(stress: number, rng?): { kept: Stack[]; left: Record<spot, Stack[]> }
  *     toJSON()
+ *     static fromJSON(data): Inventory
  */
 
 import { RngStream } from "./rng";
@@ -61,6 +66,10 @@ export interface ItemDef {
   size?: number;
   /** Free-form tags. */
   tags?: string[];
+  /** Mass in arbitrary units; compared against SpotMeta.weightCapacity. */
+  weight?: number;
+  /** Volume in arbitrary units; compared against SpotMeta.bulkCapacity. */
+  bulk?: number;
   displayName?: string;
   description?: string;
 }
@@ -74,6 +83,10 @@ export interface SpotMeta {
   disorder: number;
   lastAccessed: number;
   capacity?: number;
+  /** Max total weight (sum of weight*count across all stacks) allowed in spot. */
+  weightCapacity?: number;
+  /** Max total bulk (sum of bulk*count across all stacks) allowed in spot. */
+  bulkCapacity?: number;
 }
 
 export class Inventory {
@@ -234,6 +247,50 @@ export class Inventory {
     return { kept, left };
   }
 
+  /**
+   * Check whether adding `count` of `itemDef` to `spot` would stay within
+   * both weight and bulk capacities. Returns true when within limits (or when
+   * no capacity is set). Does NOT modify state — callers decide whether to
+   * proceed.
+   */
+  capacityOK(spot: string, itemDef: ItemDef, count = 1): boolean {
+    return this.capacityViolation(spot, itemDef, count) === null;
+  }
+
+  /**
+   * Detect-vs-resolve: returns the first capacity constraint that would be
+   * violated by adding `count` of `itemDef` to `spot`, or null if none.
+   * Resolution (refuse, swap, narrate) is left to the caller.
+   */
+  capacityViolation(
+    spot: string,
+    itemDef: ItemDef,
+    count = 1,
+  ): { kind: "weight" | "bulk"; overBy: number } | null {
+    const meta = this._meta.get(spot);
+    if (!meta) return null;
+    const stacks = this._spots.get(spot) ?? [];
+    if (meta.weightCapacity !== undefined && itemDef.weight !== undefined) {
+      let current = 0;
+      for (const s of stacks) {
+        const d = this._defs.get(s.defId);
+        if (d?.weight !== undefined) current += d.weight * s.count;
+      }
+      const total = current + itemDef.weight * count;
+      if (total > meta.weightCapacity) return { kind: "weight", overBy: total - meta.weightCapacity };
+    }
+    if (meta.bulkCapacity !== undefined && itemDef.bulk !== undefined) {
+      let current = 0;
+      for (const s of stacks) {
+        const d = this._defs.get(s.defId);
+        if (d?.bulk !== undefined) current += d.bulk * s.count;
+      }
+      const total = current + itemDef.bulk * count;
+      if (total > meta.bulkCapacity) return { kind: "bulk", overBy: total - meta.bulkCapacity };
+    }
+    return null;
+  }
+
   toJSON(): {
     defs: ItemDef[];
     spots: Record<string, Stack[]>;
@@ -244,5 +301,21 @@ export class Inventory {
     for (const [k, v] of this._spots) spots[k] = v.map((s) => ({ ...s }));
     for (const [k, v] of this._meta) meta[k] = { ...v };
     return { defs: [...this._defs.values()], spots, meta };
+  }
+
+  static fromJSON(data: {
+    defs: ItemDef[];
+    spots: Record<string, Stack[]>;
+    meta: Record<string, SpotMeta>;
+  }): Inventory {
+    const inv = new Inventory();
+    for (const def of data.defs) inv.register(def);
+    for (const [spot, stacks] of Object.entries(data.spots)) {
+      inv._spots.set(spot, stacks.map((s) => ({ ...s })));
+    }
+    for (const [spot, m] of Object.entries(data.meta)) {
+      inv._meta.set(spot, { ...m });
+    }
+    return inv;
   }
 }

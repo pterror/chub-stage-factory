@@ -22,6 +22,7 @@
  *     ok: boolean; parsed: T; stripped: string; errors: ParseError[]
  *   }
  *   parseTags(text, schema, opts?: { stripUnknown?: boolean }): ParseResult
+ *   parseTagsBatch(text, schemas, opts?): ParseResult[]  — single pass, one result per schema
  */
 
 export type FieldKind = "string" | "int" | "float" | "bool" | "list";
@@ -125,4 +126,28 @@ export function parseTags<T = Record<string, unknown>>(
     stripped: stripped.trim(),
     errors,
   };
+}
+
+/**
+ * Parse multiple schemas against the same text in a single pass.
+ * Each schema is applied independently to the original text; the stripped
+ * text from the previous schema is fed into the next, so each schema sees
+ * whatever tags the previous schemas did not consume. Returns one ParseResult
+ * per schema in input order.
+ *
+ * Use this in place of chained `parseTags` calls to collapse boilerplate.
+ */
+export function parseTagsBatch<T extends Record<string, unknown> = Record<string, unknown>>(
+  text: string,
+  schemas: Schema[],
+  opts: { stripUnknown?: boolean } = {},
+): ParseResult<T>[] {
+  const results: ParseResult<T>[] = [];
+  let current = text;
+  for (const schema of schemas) {
+    const r = parseTags<T>(current, schema, opts);
+    results.push(r);
+    current = r.stripped;
+  }
+  return results;
 }

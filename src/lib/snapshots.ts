@@ -25,6 +25,8 @@
  *     get(name): SnapshotData | undefined
  *     set(name, data): void
  *     diff(name): DiffResult | { error }
+ *     toJSON(): { snaps: Record<name, SnapshotData> }
+ *     static fromJSON(data, body): Snapshots
  */
 
 import { Body, TransformationInstance } from "./body";
@@ -103,6 +105,33 @@ export class Snapshots {
 
   set(name: string, data: SnapshotData): void {
     this._snaps.set(name, data);
+  }
+
+  /** Serialize all stored snapshots. The body reference is not serialized. */
+  toJSON(): { snaps: Record<string, SnapshotData> } {
+    const snaps: Record<string, SnapshotData> = {};
+    for (const [name, data] of this._snaps) {
+      snaps[name] = {
+        baseSlots: { ...data.baseSlots },
+        transformations: data.transformations.map((tf) => ({ ...tf })),
+      };
+    }
+    return { snaps };
+  }
+
+  /**
+   * Reconstruct a Snapshots instance from serialized data. The caller must
+   * supply the live body (snapshot data and body must refer to the same slots).
+   */
+  static fromJSON(data: { snaps: Record<string, SnapshotData> }, body: Body): Snapshots {
+    const s = new Snapshots(body);
+    for (const [name, snap] of Object.entries(data.snaps)) {
+      s._snaps.set(name, {
+        baseSlots: { ...snap.baseSlots },
+        transformations: snap.transformations.map((tf) => ({ ...tf })),
+      });
+    }
+    return s;
   }
 
   diff(name: string): DiffResult | { error: string } {

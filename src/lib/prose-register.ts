@@ -23,7 +23,8 @@
  *     distance: "close" | "near" | "wide";
  *     extras?: string[];
  *   }
- *   PARSE_TIME_REGISTERS: Record<string, RegisterSpec>   // shorthands
+ *   PRESET_REGISTERS: const Record of RegisterSpec — keys typed as RegisterPreset
+ *   type RegisterPreset = keyof typeof PRESET_REGISTERS
  *   ARCHITECTURES: Record<ArchitectureName, { summary: string; example: string }>
  *   proseInstructions({architectures, register}): string
  */
@@ -47,12 +48,15 @@ export interface RegisterSpec {
   extras?: string[];
 }
 
-export const PRESET_REGISTERS: Record<string, RegisterSpec> = {
+export const PRESET_REGISTERS = {
   "close-2nd-past": { pov: "close-second", tense: "past", distance: "close" },
   "close-2nd-present": { pov: "close-second", tense: "present", distance: "close" },
   "1st-past": { pov: "first", tense: "past", distance: "close" },
   "wide-3rd-present": { pov: "third", tense: "present", distance: "wide" },
-};
+} as const satisfies Record<string, RegisterSpec>;
+
+/** Union of the preset register names — catches typos at compile time. */
+export type RegisterPreset = keyof typeof PRESET_REGISTERS;
 
 export const ARCHITECTURES: Record<ArchitectureName, { summary: string; example: string }> = {
   accumulation: {
@@ -119,9 +123,9 @@ export const ARCHITECTURES: Record<ArchitectureName, { summary: string; example:
 
 export function proseInstructions(opts: {
   architectures: readonly ArchitectureName[];
-  register: RegisterSpec | keyof typeof PRESET_REGISTERS;
+  register: RegisterSpec | RegisterPreset;
 }): string {
-  const reg =
+  const reg: RegisterSpec =
     typeof opts.register === "string" ? PRESET_REGISTERS[opts.register] : opts.register;
   const arches = opts.architectures.map((n) => {
     const a = ARCHITECTURES[n];
