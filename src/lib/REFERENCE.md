@@ -58,7 +58,7 @@ lookup after you know what you're looking for.
 - `canEquip(def, body): CanEquip`
 - `checkConstraints(def, body): null | { adapted, alternative } | Violation`
 - `fit(inst, body): FitReport`
-- `class Loadout { constructor(body); equip(def, now); unequip(slot); getEquipped(slot); getAllEquipped(); checkAllConstraints(); fit(slot); resolveViolations() }`
+- `class Loadout { constructor(body); equip(def, now); unequip(slot); getEquipped(slot); getAllEquipped(); checkAllConstraints(); fit(slot); resolveViolations(); toJSON(); static fromJSON(data, body, defs) }`
 - `fromDict(data): EquipmentDef`
 
 ## `constraints.ts`
@@ -73,7 +73,7 @@ lookup after you know what you're looking for.
 
 - `interface SnapshotData { baseSlots, transformations }`
 - `interface DiffResult { changed, slotsAdded, slotsRemoved, tagsAdded, tagsRemoved, tfsAdded, tfsRemoved }`
-- `class Snapshots { constructor(body); save(name); restore(name); has(name); delete(name); list(); clear(); get(name); set(name, data); diff(name) }`
+- `class Snapshots { constructor(body); save(name); restore(name); has(name); delete(name); list(); clear(); get(name); set(name, data); diff(name); toJSON(); static fromJSON(data, body) }`
 
 ## `rng.ts`
 
@@ -94,20 +94,20 @@ lookup after you know what you're looking for.
 - `interface EffectMagnitudes { stats?, tagsAdd?, tagsRemove?, abilities? }`
 - `interface EffectDef { id, targets, baseMagnitudes?, duration?, trajectory?, stacking?, dispelTags? }`
 - `interface EffectInstance { id, def, startTime, count }`
-- `class EffectStore { apply(def, now); remove(id); dispelByTag(tag); active(); magnitudesFor(id, now); totalMagnitudes(now); tick(now) }`
+- `class EffectStore { apply(def, now); remove(id); dispelByTag(tag); active(); magnitudesFor(id, now); totalMagnitudes(now); tick(now); toJSON(); static fromJSON(data, defs) }`
 
 ## `scheduler.ts`
 
 - `interface ScheduledEvent<T> { at, type, data? }`
 - `type Handler<S> = (event, state, scheduler) => ScheduledEvent[] | void`
-- `class Scheduler<S> { constructor(state); schedule(ev); on(type, handler); peek(); size(); clear(); tickTo(now): ScheduledEvent[] }`
+- `class Scheduler<S> { constructor(state); schedule(ev); on(type, handler); peek(); size(); clear(); tickTo(now): ScheduledEvent[]; toJSON(); static fromJSON(data, state, handlers?) }`
 
 ## `fsm.ts`
 
 - `interface TransitionObj<E> { to?, push?, pop?, emit? }`
 - `type Transition<E> = TransitionObj<E> | void`
 - `interface StateDef<C, E> { parent?, enter?, exit?, on? }`
-- `class Fsm<C, E> { constructor(initial, ctx, states?); ctx; defineState(name, def); current(); path(); stack(); dispatch(event, data?): E[]; reset(initial?) }`
+- `class Fsm<C, E> { constructor(initial, ctx, states?); ctx; defineState(name, def); current(); path(); stack(); dispatch(event, data?): E[]; reset(initial?); toJSON(); static fromJSON(data, ctx, states?) }`
 
 ## `inventory.ts`
 
@@ -115,13 +115,15 @@ lookup after you know what you're looking for.
 - `interface ItemDef { id, carryClass, portable, counted, defaultSpot?, channels?, size?, tags?, displayName?, description? }`
 - `interface Stack { defId, count }`
 - `interface SpotMeta { disorder, lastAccessed, capacity? }`
-- `class Inventory { register(def); getDef(id); ensureSpot(name, meta?); spots(); contents(spot); meta(spot); add(spot, defId, n=1); remove(spot, defId, n=1); move(from, to, defId, n=1); find(defId); touch(spot, now); accessibility(defId, spot, now); resolveLeaveLocation(stress, now, actorSpots, rng?); toJSON() }`
+- `interface ItemDef { ..., weight?, bulk? }` — weight/bulk are optional; compared against SpotMeta capacities
+- `interface SpotMeta { ..., weightCapacity?, bulkCapacity? }`
+- `class Inventory { register(def); getDef(id); ensureSpot(name, meta?); spots(); contents(spot); meta(spot); add(spot, defId, n=1); remove(spot, defId, n=1); move(from, to, defId, n=1); find(defId); touch(spot, now); accessibility(defId, spot, now); capacityOK(spot, itemDef, count=1): boolean; capacityViolation(spot, itemDef, count=1): {kind, overBy}|null; resolveLeaveLocation(stress, now, actorSpots, rng?); toJSON(); static fromJSON(data) }`
 
 ## `grid-inventory.ts`
 
 - `type Rot = 0 | 1 | 2 | 3`
 - `interface Placement { defId, x, y, rot, count }`
-- `class GridInventory { constructor(width, height); setShape(defId, shape); getShape(defId); rotated(shape, rot); placements(); canPlace(defId, x, y, rot, count?); place(p); remove(idx); occupancy(); toJSON() }`
+- `class GridInventory { constructor(width, height); setShape(defId, shape); getShape(defId); rotated(shape, rot); placements(); canPlace(defId, x, y, rot, count?); place(p); remove(idx); occupancy(); toJSON(); static fromJSON(data) }`
 
 ## `action.ts`
 
@@ -149,8 +151,9 @@ lookup after you know what you're looking for.
 - `interface RealtimeCombatant { id, pos, vel, radius, team?, hp, tags? }`
 - `interface AttackDef { id, shape, duration, pierces?, effects, hitFilter?, damage? }`
 - `interface Attack { id, def, owner, bounds, vel?, bornAt, hits }`
-- `type RealtimeEvent = moved | attack_spawned | attack_hit | attack_expired | downed`
-- `class RealtimeWorld { combatants; attacks; constructor(cellSize=64); add(c); spawnAttack(def, owner, initial, now); tick(dt, now): RealtimeEvent[] }`
+- `type RealtimeEvent = moved | attack_spawned | attack_hit | attack_expired | downed | out-of-bounds`
+- `interface ArenaBounds { minX, maxX, minY, maxY }`
+- `class RealtimeWorld { combatants; attacks; bounds?; constructor(cellSize=64, bounds?); add(c); spawnAttack(def, owner, initial, now); tick(dt, now): RealtimeEvent[] }` — combatants clamped, attacks outside bounds culled with `out-of-bounds` event
 
 ## `physics.ts`
 
@@ -174,7 +177,8 @@ lookup after you know what you're looking for.
 
 - `type ArchitectureName` (10 entries; see PROSE.md)
 - `interface RegisterSpec { pov, tense, distance, extras? }`
-- `PRESET_REGISTERS: Record<name, RegisterSpec>` — close-2nd-past, close-2nd-present, 1st-past, wide-3rd-present
+- `PRESET_REGISTERS` — `const` object; keys: close-2nd-past, close-2nd-present, 1st-past, wide-3rd-present
+- `type RegisterPreset = keyof typeof PRESET_REGISTERS` — use instead of raw string for typo safety
 - `ARCHITECTURES: Record<ArchitectureName, { summary, example }>`
 - `proseInstructions({architectures, register}): string`
 
@@ -186,6 +190,7 @@ lookup after you know what you're looking for.
 - `interface ParseError { tag, reason }`
 - `interface ParseResult<T> { ok, parsed, stripped, errors }`
 - `parseTags(text, schema, opts?: { stripUnknown? }): ParseResult`
+- `parseTagsBatch(text, schemas[], opts?): ParseResult[]` — single pass; each schema strips from prior's output
 
 ## `classifier.ts`
 

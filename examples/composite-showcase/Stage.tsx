@@ -24,21 +24,24 @@
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { Body } from "../../src/lib/body";
+import { Body, TransformationInstance } from "../../src/lib/body";
 import { TransformationDef, apply as applyTf } from "../../src/lib/transformation";
 import { EquipmentDef, Loadout, fromDict as eqFromDict } from "../../src/lib/equipment";
-import { Inventory } from "../../src/lib/inventory";
+import { Inventory, ItemDef, Stack, SpotMeta } from "../../src/lib/inventory";
 import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, runRound, AttackProfile, CombatEvent } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
 import { Rng } from "../../src/lib/rng";
-import { parseTags } from "../../src/lib/tag-parser";
+import { parseTags, parseTagsBatch } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 
 interface MessageStateType {
   ticks: number; mode: "shop" | "combat" | "ended";
   ended?: "pc-down" | "enemy-down"; lastAction?: string;
+  body?: { baseSlots: Record<string, string[]>; transformations: TransformationInstance[] };
+  loadout?: { equipped: Record<string, { defId: string; equippedAt: number; snapshotTags: string[] }> };
+  inv?: { defs: ItemDef[]; spots: Record<string, Stack[]>; meta: Record<string, SpotMeta> };
 }
 type ChatStateType = null; type InitStateType = null; type ConfigType = null;
 
@@ -107,7 +110,17 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
     return { success: true, error: null, initState: null, chatState: null };
   }
-  async setState(state: MessageStateType): Promise<void> { if (state) this.msg = { ...this.msg, ...state }; }
+  async setState(state: MessageStateType): Promise<void> {
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Restore stateful primitives from serialized snapshots so swipes don't lose state.
+    if (state.body) {
+      this.body = Body.fromJSON(state.body);
+      this.loadout = new Loadout(this.body);
+      if (state.loadout) this.loadout = Loadout.fromJSON(state.loadout, this.body, MODS);
+    }
+    if (state.inv) this.inv = Inventory.fromJSON(state.inv);
+  }
 
   private grantsForEquipped(): { tags: string[]; effects: EffectDef[] } {
     const tags: string[] = []; const effects: EffectDef[] = [];
@@ -227,24 +240,24 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
       register: "close-2nd-present",
       prefix,
     });
+    this.msg.body = this.body.toJSON();
+    this.msg.loadout = this.loadout.toJSON();
+    this.msg.inv = this.inv.toJSON();
     return { stageDirections, messageState: this.msg };
   }
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     const now = this.msg.ticks;
-    let text = botMessage.content;
-    const r1 = parseTags<Record<string, unknown>>(text, { install: { kind: "string", enum: Object.keys(TFS) } });
-    text = r1.stripped;
-    const r2 = parseTags<Record<string, unknown>>(text, { equip: { kind: "string", enum: Object.keys(MODS) } });
-    text = r2.stripped;
-    const r3 = parseTags<Record<string, unknown>>(text, { unequip: { kind: "string", enum: ["head", "torso"] } });
-    text = r3.stripped;
-    const r4 = parseTags<Record<string, unknown>>(text, { take: { kind: "string" } });
-    text = r4.stripped;
-    const r5 = parseTags<Record<string, unknown>>(text, { start_combat: { kind: "bool" } });
-    text = r5.stripped;
-    const r6 = parseTags<Record<string, unknown>>(text, { action: { kind: "string", enum: ["swing", "hack"] } });
-    text = r6.stripped;
+    // Use parseTagsBatch to collapse 6 chained parseTags calls into one.
+    const [r1, r2, r3, r4, r5, r6] = parseTagsBatch(botMessage.content, [
+      { install: { kind: "string", enum: Object.keys(TFS) } },
+      { equip: { kind: "string", enum: Object.keys(MODS) } },
+      { unequip: { kind: "string", enum: ["head", "torso"] } },
+      { take: { kind: "string" } },
+      { start_combat: { kind: "bool" } },
+      { action: { kind: "string", enum: ["swing", "hack"] } },
+    ]);
+    let text = r6.stripped;
 
     if (this.msg.mode === "shop") {
       if (typeof r1.parsed.install === "string" && r1.parsed.install) {
@@ -262,8 +275,15 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
       if (typeof r4.parsed.take === "string" && r4.parsed.take) {
         const found = this.inv.find(r4.parsed.take as string);
         if (found.length) {
-          this.inv.move(found[0].spot, "pocket", r4.parsed.take as string, 1);
-          this.msg.lastAction = `took:${r4.parsed.take}`;
+          const def = this.inv.getDef(r4.parsed.take as string);
+          // capacityOK: check weight/bulk before moving (demonstrates gap #4).
+          if (def && !this.inv.capacityOK("pocket", def, 1)) {
+            const v = this.inv.capacityViolation("pocket", def, 1);
+            this.msg.lastAction = `take-refused:${r4.parsed.take}:${v?.kind}-over-${v?.overBy?.toFixed(1)}`;
+          } else {
+            this.inv.move(found[0].spot, "pocket", r4.parsed.take as string, 1);
+            this.msg.lastAction = `took:${r4.parsed.take}`;
+          }
         }
       }
       if (r5.parsed.start_combat === true) {

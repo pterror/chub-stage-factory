@@ -20,7 +20,10 @@ import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 
-interface MessageStateType { ticks: number; lastTraj?: TrajectoryStep[] }
+interface MessageStateType {
+  ticks: number; lastTraj?: TrajectoryStep[];
+  rng?: { seed: string; streams: Record<string, [number, number, number, number]> };
+}
 type ChatStateType = null; type InitStateType = null; type ConfigType = null;
 
 interface TrajectoryStep { x: number; y: number; bounced: boolean }
@@ -47,7 +50,12 @@ export class PhysicsStage extends StageBase<InitStateType, ChatStateType, Messag
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
     return { success: true, error: null, initState: null, chatState: null };
   }
-  async setState(state: MessageStateType): Promise<void> { if (state) this.msg = { ...this.msg, ...state }; }
+  async setState(state: MessageStateType): Promise<void> {
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Restore RNG state so cosmetic jitter is replay-consistent after swipes.
+    if (state.rng) this.rng = Rng.fromJSON(state.rng);
+  }
 
   private simulate(x: number, y: number, vx: number, vy: number): { hit: string[]; final: AABB; steps: TrajectoryStep[] } {
     const proj: AABB = { x, y, w: 6, h: 6 };
@@ -122,6 +130,7 @@ export class PhysicsStage extends StageBase<InitStateType, ChatStateType, Messag
         "Narrate the throw using the `hit` list and `ended_at` position — do not invent " +
         "trajectories.",
     });
+    this.msg.rng = this.rng.toJSON();
     return { stageDirections, messageState: this.msg };
   }
 

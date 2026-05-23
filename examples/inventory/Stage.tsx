@@ -15,13 +15,14 @@
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { Inventory, Stack } from "../../src/lib/inventory";
+import { Inventory, ItemDef, Stack, SpotMeta } from "../../src/lib/inventory";
 import { ObservationSource, assembleObservations } from "../../src/lib/observation";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 
 interface MessageStateType {
   ticks: number;
   lastTakenDefId?: string;
+  inv?: { defs: ItemDef[]; spots: Record<string, Stack[]>; meta: Record<string, SpotMeta> };
 }
 type ChatStateType = null;
 type InitStateType = null;
@@ -71,7 +72,11 @@ export class InventoryStage extends StageBase<InitStateType, ChatStateType, Mess
   }
 
   async setState(state: MessageStateType): Promise<void> {
-    if (state) this.msg = { ...this.msg, ...state };
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Restore inventory from serialized snapshot so swipes don't lose state.
+    if (state.inv) this.state.inv = Inventory.fromJSON(state.inv);
+    if (state.ticks !== undefined) this.state.now = state.ticks;
   }
 
   private sources(): ObservationSource<PakState>[] {
@@ -135,6 +140,7 @@ export class InventoryStage extends StageBase<InitStateType, ChatStateType, Mess
       register: "close-2nd-present",
       prefix: "Pak is the POV-adjacent shopkeeper. The block below is ground truth; do not name spot ids verbatim — translate them into prose.",
     });
+    this.msg.inv = this.state.inv.toJSON();
     return { stageDirections, messageState: this.msg, modifiedMessage: null, systemMessage: null, error: null, chatState: null };
   }
 

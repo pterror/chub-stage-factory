@@ -23,6 +23,7 @@ import { assembleObservations, ObservationSource } from "../../src/lib/observati
 interface MessageStateType {
   ticks: number;
   pcTag?: string;
+  effects?: { instances: { id: string; startTime: number; count: number }[] };
 }
 type ChatStateType = null;
 type InitStateType = null;
@@ -70,7 +71,10 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
   }
 
   async setState(state: MessageStateType): Promise<void> {
-    if (state) this.msg = { ...this.msg, ...state };
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Restore effect store so swipes return to actual effect state.
+    if (state.effects) this.store = EffectStore.fromJSON(state.effects, TINCTURES);
   }
 
   private observationSources(now: number): ObservationSource<{ now: number }>[] {
@@ -128,6 +132,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
         "from what the user sees). Available tincture ids and their stacking are in the " +
         "visual observation.",
     });
+    this.msg.effects = this.store.toJSON();
     return { stageDirections, messageState: this.msg };
   }
 

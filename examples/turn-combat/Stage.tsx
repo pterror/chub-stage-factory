@@ -27,6 +27,8 @@ interface MessageStateType {
   pcHp: number;
   enemyHp: number;
   ended?: "pc-down" | "enemy-down";
+  pcEffects?: { instances: { id: string; startTime: number; count: number }[] };
+  enemyEffects?: { instances: { id: string; startTime: number; count: number }[] };
 }
 type ChatStateType = null;
 type InitStateType = null;
@@ -84,7 +86,19 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
     return { success: true, error: null, initState: null, chatState: null };
   }
   async setState(state: MessageStateType): Promise<void> {
-    if (state) this.msg = { ...this.msg, ...state };
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Rebuild combatants from serialized state so swipes restore real HP/effects.
+    const EFFECT_DEFS: Record<string, typeof GUARD_EFFECT> = {
+      [GUARD_EFFECT.id]: GUARD_EFFECT,
+      [SUNDER_EFFECT.id]: SUNDER_EFFECT,
+    };
+    const pc = this.combatants.find((c) => c.id === "pc")!;
+    const enemy = this.combatants.find((c) => c.id === "duellist")!;
+    pc.hp = state.pcHp ?? pc.hp;
+    enemy.hp = state.enemyHp ?? enemy.hp;
+    if (state.pcEffects) pc.effects = EffectStore.fromJSON(state.pcEffects, EFFECT_DEFS);
+    if (state.enemyEffects) enemy.effects = EffectStore.fromJSON(state.enemyEffects, EFFECT_DEFS);
   }
 
   private chooseFor = (actor: Combatant, world: World) => {
@@ -139,6 +153,10 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
         "your reply. The previous round's events are in the auditory observation — render them, " +
         "do not invent damage numbers.",
     });
+    const pc = this.combatants.find((c) => c.id === "pc")!;
+    const enemy = this.combatants.find((c) => c.id === "duellist")!;
+    this.msg.pcEffects = pc.effects?.toJSON();
+    this.msg.enemyEffects = enemy.effects?.toJSON();
     return { stageDirections, messageState: this.msg };
   }
 

@@ -16,13 +16,17 @@
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { RealtimeWorld, AttackDef, RealtimeEvent } from "../../src/lib/combat-realtime";
+import { RealtimeWorld, AttackDef, RealtimeEvent, RealtimeCombatant } from "../../src/lib/combat-realtime";
 import { Rng } from "../../src/lib/rng";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 
-interface MessageStateType { ticks: number; hp: number }
+interface MessageStateType {
+  ticks: number; hp: number;
+  combatants?: Array<Omit<RealtimeCombatant, 'vel'> & { vel: { x: number; y: number } }>;
+  rng?: { seed: string; streams: Record<string, [number, number, number, number]> };
+}
 type ChatStateType = null; type InitStateType = null; type ConfigType = null;
 
 const BULLET: AttackDef = {
@@ -31,9 +35,10 @@ const BULLET: AttackDef = {
 };
 
 const ARENA = { w: 240, h: 160 };
+const ARENA_BOUNDS = { minX: 0, maxX: ARENA.w, minY: 0, maxY: ARENA.h };
 
 export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
-  world = new RealtimeWorld(48);
+  world = new RealtimeWorld(48, ARENA_BOUNDS);
   rng = Rng.fromSeed("arena");
   msg: MessageStateType = { ticks: 0, hp: 30 };
   events: RealtimeEvent[] = [];
@@ -62,7 +67,16 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
     return { success: true, error: null, initState: null, chatState: null };
   }
-  async setState(state: MessageStateType): Promise<void> { if (state) this.msg = { ...this.msg, ...state }; }
+  async setState(state: MessageStateType): Promise<void> {
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Restore combatant positions and RNG for swipe-safety.
+    if (state.combatants) {
+      this.world = new RealtimeWorld(48, ARENA_BOUNDS);
+      for (const c of state.combatants) this.world.add({ ...c });
+    }
+    if (state.rng) this.rng = Rng.fromJSON(state.rng);
+  }
 
   private observationSources(): ObservationSource<{ now: number }>[] {
     return [
@@ -109,10 +123,13 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
       architectures: ["fragment_cascade", "terminal_sense_shift"],
       register: "close-2nd-present",
       prefix:
-        "An arena. Drones circle, closing. To fire a bullet from your position, emit " +
-        "`<shoot>dx,dy</dx>` (direction; will be normalised). Render the auditory events " +
-        "as the prose; don't invent hits the events don't show.",
+        "An arena (240×160). Drones circle, closing. To fire a bullet from your position, emit " +
+        "`<shoot>dx,dy</shoot>` (direction; will be normalised). Render the auditory events " +
+        "as the prose; don't invent hits the events don't show. " +
+        "An `out-of-bounds` event means the projectile left the arena — narrate it as a miss.",
     });
+    this.msg.combatants = [...this.world.combatants.values()].map((c) => ({ ...c, pos: { ...c.pos }, vel: { ...c.vel } }));
+    this.msg.rng = this.rng.toJSON();
     return { stageDirections, messageState: this.msg };
   }
 
@@ -123,9 +140,10 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
       const [dx, dy] = (r.parsed.shoot as string[]).map(Number);
       if (Number.isFinite(dx) && Number.isFinite(dy)) this.shoot(dx, dy, now);
     }
-    // Simulate ~0.5s in 5 ticks
+    // Simulate ~0.5s in 5 ticks; out-of-bounds attacks are auto-culled by RealtimeWorld.
     this.events = [];
     for (let i = 0; i < 5; i++) this.events.push(...this.world.tick(0.1, now + i * 0.1));
+    // out-of-bounds events are included in this.events; stage surfaces them to LLM via observations.
     // Spawn another drone every 3 turns
     if (now % 3 === 0) this.spawnDrone(now);
     const you = this.world.combatants.get("you");

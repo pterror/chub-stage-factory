@@ -15,14 +15,18 @@
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { Body } from "../../src/lib/body";
+import { Body, TransformationInstance } from "../../src/lib/body";
 import { TransformationDef, apply as applyTf } from "../../src/lib/transformation";
 import { EquipmentDef, Loadout, fromDict as eqFromDict } from "../../src/lib/equipment";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 
-interface MessageStateType { ticks: number; lastAction?: string }
+interface MessageStateType {
+  ticks: number; lastAction?: string;
+  body?: { baseSlots: Record<string, string[]>; transformations: TransformationInstance[] };
+  loadout?: { equipped: Record<string, { defId: string; equippedAt: number; snapshotTags: string[] }> };
+}
 type ChatStateType = null; type InitStateType = null; type ConfigType = null;
 
 const MODS: Record<string, EquipmentDef> = {
@@ -97,7 +101,16 @@ export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, Mes
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
     return { success: true, error: null, initState: null, chatState: null };
   }
-  async setState(state: MessageStateType): Promise<void> { if (state) this.msg = { ...this.msg, ...state }; }
+  async setState(state: MessageStateType): Promise<void> {
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Restore body + loadout from serialized state for swipe-safety.
+    if (state.body) {
+      this.body = Body.fromJSON(state.body);
+      this.loadout = new Loadout(this.body);
+      if (state.loadout) this.loadout = Loadout.fromJSON(state.loadout, this.body, MODS);
+    }
+  }
 
   private observationSources(now: number): ObservationSource<{ now: number }>[] {
     return [
@@ -165,6 +178,8 @@ export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, Mes
         "from a slot, emit `<unequip>head|torso</unequip>`. If the violations list is non-empty " +
         "you MUST surface it to the patient before performing any new action.",
     });
+    this.msg.body = this.body.toJSON();
+    this.msg.loadout = this.loadout.toJSON();
     return { stageDirections, messageState: this.msg };
   }
 

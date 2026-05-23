@@ -14,14 +14,18 @@
 import { ReactElement } from "react";
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
-import { Body } from "../../src/lib/body";
+import { Body, TransformationInstance } from "../../src/lib/body";
 import { TransformationDef, apply, applyTrajectories, getConflicts } from "../../src/lib/transformation";
-import { Snapshots } from "../../src/lib/snapshots";
+import { Snapshots, SnapshotData } from "../../src/lib/snapshots";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 
-interface MessageStateType { ticks: number; lastApplied?: string }
+interface MessageStateType {
+  ticks: number; lastApplied?: string;
+  body?: { baseSlots: Record<string, string[]>; transformations: TransformationInstance[] };
+  snaps?: { snaps: Record<string, SnapshotData> };
+}
 type ChatStateType = null; type InitStateType = null; type ConfigType = null;
 
 const TFS: Record<string, TransformationDef> = {
@@ -76,7 +80,16 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
   async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
     return { success: true, error: null, initState: null, chatState: null };
   }
-  async setState(state: MessageStateType): Promise<void> { if (state) this.msg = { ...this.msg, ...state }; }
+  async setState(state: MessageStateType): Promise<void> {
+    if (!state) return;
+    this.msg = { ...this.msg, ...state };
+    // Restore body + snapshots from serialized state for swipe-safety.
+    if (state.body) {
+      this.body = Body.fromJSON(state.body);
+      this.snaps = new Snapshots(this.body);
+      if (state.snaps) this.snaps = Snapshots.fromJSON(state.snaps, this.body);
+    }
+  }
 
   private tryApply(id: string, now: number): { ok: boolean; reason?: string } {
     const def = TFS[id]; if (!def) return { ok: false, reason: "no-such-tf" };
@@ -132,6 +145,8 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
         "emit `<restore>baseline</restore>`. The in_progress array shows partially-developed " +
         "TFs — render them as the gradual change they are.",
     });
+    this.msg.body = this.body.toJSON();
+    this.msg.snaps = this.snaps.toJSON();
     return { stageDirections, messageState: this.msg };
   }
 
