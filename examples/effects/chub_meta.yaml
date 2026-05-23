@@ -1,0 +1,16 @@
+project_name: "Klio the Apothecary"
+tagline: "Buffs and debuffs as tinctures, with stacking and dispel."
+creator_notes: "Reference stage for the chub-stage-factory effects primitive."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags: ['Stage', 'Example', 'Effects']
+
+config_schema: { type: object, properties: {} }
+state_schema:
+  init: { type: object, properties: {} }
+  message:
+    type: object
+    properties:
+      ticks: { type: integer, default: 0 }
+      pcTag: { type: string }
+  chat: { type: object, properties: {} }

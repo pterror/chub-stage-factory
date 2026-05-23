@@ -1,0 +1,4 @@
+name: "Klio's bench"
+characters:
+  - '@characters/klio.yaml'
+scenario: "Klio's apothecary, river-end of the market. A brewing bench, a row of stoppered tinctures."

@@ -13,6 +13,8 @@ import { InitialData, StageBase } from "@chub-ai/stages-ts";
 
 import { InventoryStage } from "./inventory/Stage";
 import inventoryInit from "./inventory/test-init.json";
+import { EffectsStage } from "./effects/Stage";
+import effectsInit from "./effects/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -33,6 +35,14 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: ["inventory", "observation", "chub-adapters", "prose-register"],
     factory: (d) => new InventoryStage(d),
     testInit: inventoryInit,
+  },
+  {
+    name: "effects",
+    label: "Effects — Klio the apothecary",
+    description: "Tinctures as effects; stacking, trajectories, dispel-by-tag.",
+    primitives: ["effects", "stats", "scheduler", "tag-parser", "chub-adapters"],
+    factory: (d) => new EffectsStage(d),
+    testInit: effectsInit,
   },
 ];
 
