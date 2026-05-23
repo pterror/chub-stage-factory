@@ -73,6 +73,24 @@ class MyStage extends StageBase<Init, Chat, Msg, Config> {
 }
 ```
 
+## TypeScript hint: `JsonOf<T>`
+
+Because `shard(name, instance, toJSON, fromJSON, ...)` infers `M` from
+`toJSON`'s return type, the `fromJSON` parameter usually needs an
+explicit annotation when the primitive's static `fromJSON` has a strict
+signature (e.g. `Inventory.fromJSON(data: { defs: ItemDef[]; ... })`).
+The idiom:
+
+```ts
+shard("inv", this.inv,
+  (i) => i.toJSON(),
+  (d: ReturnType<Inventory["toJSON"]>) => Inventory.fromJSON(d),
+  this.layers.messageStateBackend, chubTreeHistory())
+```
+
+This is verbose but it keeps the shard helper a one-liner without a
+parallel `JsonOf<T>` helper that would couple every primitive's name.
+
 ## What this does NOT do
 
 - It does not auto-detect what layer a primitive *should* live on. That is a design decision per stage.

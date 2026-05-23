@@ -96,9 +96,23 @@ appending it to `stageDirections`. The LLM is now competing with prose, not gene
 - Not a framework. No required base class beyond `StageBase` (which the SDK requires anyway).
 - Not a UI kit. No React components. Use plain JSX in your `render()`.
 - Not a physics engine. `physics.ts` is enough for "did the bullet hit the wall," not for cloth.
-- Not a save system. Use `messageState` / `chatState` as the SDK intends; primitives serialize
-  trivially because they're plain data plus mutable holders.
 - Not an event bus. Subsystems return events as arrays; the stage decides what to dispatch.
+
+## Composition over strategy
+
+The persistence layer (`persistence/`) is the canonical example of the
+rule. There is no single "saving strategy" — there is a `SaveBackend`
+(where), a `History<M>` (how branches behave), and a `Shard` that bundles
+them with a primitive. A stage selects the regime per shard by
+composition: `inv → messageStateBackend + chubTreeHistory()` for
+per-branch swipe-aware inventory; `body → chatStateBackend +
+forbidBranching(snapshotHistory())` for canon body state that does not
+un-do via swipe. New regimes (autosave-to-localStorage, debounced
+writes, rolling slot pruning) compose without library changes.
+
+This is the shape every primitive in the library aims for. If you find
+yourself writing `if (mode === "tree") ... else if (mode === "linear")`,
+you are reaching for a strategy enum where a wrapper would do.
 
 ## File-shape contract
 

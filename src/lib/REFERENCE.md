@@ -177,10 +177,9 @@ lookup after you know what you're looking for.
 
 - `type ArchitectureName` (10 entries; see PROSE.md)
 - `interface RegisterSpec { pov, tense, distance, extras? }`
-- `PRESET_REGISTERS` — `const` object; keys: close-2nd-past, close-2nd-present, 1st-past, wide-3rd-present
-- `type RegisterPreset = keyof typeof PRESET_REGISTERS` — use instead of raw string for typo safety
 - `ARCHITECTURES: Record<ArchitectureName, { summary, example }>`
-- `proseInstructions({architectures, register}): string`
+- `proseInstructions({architectures, register: RegisterSpec}): string`
+- (no preset catalog ships; construct `RegisterSpec` inline at the callsite)
 
 ## `tag-parser.ts`
 
@@ -210,6 +209,46 @@ lookup after you know what you're looking for.
 - `emitStageDirections({observations, architectures?, register?, prefix?}): string`
 - `type Reducer<S, T> = (state, parsed, errors) => void`
 - `parseAndApply(text, pairs, state): { stripped, results }`
+- re-exports from `persistence/`: `chubTreeHistory`, `createChubLayers`, `bindStore`, `mergeResponses`, `shard`
+
+## `persistence/`
+
+The state-persistence layer. See `persistence/README.md` for the recipe
+table and full example.
+
+### `persistence/backend.ts`
+- `interface SaveBackend { load(key), save(key, data), remove(key) }`
+- `type LayerGet`, `type LayerSet`
+- `initStateBackend(get, set): SaveBackend`
+- `chatStateBackend(get, set): SaveBackend`
+- `messageStateBackend(get, set): SaveBackend`
+- `tee(...backends): SaveBackend` — fan out writes; read from first
+- `debounced(inner, ms): SaveBackend` — coalesce writes per key
+- `rolling(inner, n, prefix): SaveBackend` — keep N most-recent keys
+
+### `persistence/history.ts`
+- `type MomentId = string`
+- `interface Moment<M> { id, parentId?, payload }`
+- `interface History<M> { moments, cursor, commit, navigate, state, children, parent, siblings, root }`
+- `snapshotHistory<M>(): History<M>` — full payload per moment, tree
+- `diffHistory<M>(base): History<M>` — diff per moment vs parent
+- `forbidBranching(h): History<M>` — commits overwrite cursor in place
+- `bounded(h, n): History<M>` — prune to ~n moments on overflow
+- `persisted(h, backend, key): History<M>` — autosave cursor payload
+- `noHistory<M>(): History<M>` — single moment; navigation is a no-op
+
+### `persistence/store.ts`
+- `interface SaveableState<M> { serialize, deserialize }`
+- `asSaveable(instance, toJSON, fromJSON): SaveableState<M>` — bridge existing primitives
+- `interface Shard<M> { name, state, backend, history }`
+- `class PersistenceStore { load(), commit(), saveSlot(name), loadSlot(name), listSlots(), navigateAll(idMap) }`
+
+### `persistence/chub.ts`
+- `chubTreeHistory<M>(): History<M>` — default branch-aware history for messageState shards
+- `createChubLayers(seed?): { mirror, initStateBackend, chatStateBackend, messageStateBackend, reset }`
+- `bindStore(store, { layers }): { setState, beforePrompt, afterResponse, initial }`
+- `mergeResponses(a, b)` — compose Partial<StageResponse>s
+- `shard(name, instance, toJSON, fromJSON, backend, history): Shard<M>` — one-liner constructor
 
 ## `replay.ts`
 

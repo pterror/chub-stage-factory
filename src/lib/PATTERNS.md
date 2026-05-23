@@ -11,6 +11,65 @@ closest to the design.
 
 ---
 
+## 0. Persistence wiring (read this first)
+
+Every recipe below has stateful primitives. The pattern for hooking them
+into Chub's three state layers is uniform: build a `PersistenceStore` in
+the constructor, call `store.load()` + `bound.initial()` in `load()`,
+delegate `setState()` to `bound.setState`, and compose your prose work
+with `bound.beforePrompt` / `bound.afterResponse` via `mergeResponses`.
+
+```ts
+import {
+  PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory,
+  forbidBranching, noHistory, bindStore, mergeResponses, shard,
+} from "./lib/persistence";
+
+class MyStage extends StageBase<Init, Chat, Msg, Cfg> {
+  inv = new Inventory(); body = new Body({...}); rng = Rng.fromSeed("...");
+  layers = createChubLayers();
+  store!: PersistenceStore;
+  bound!: ReturnType<typeof bindStore<Chat, Msg>>;
+
+  constructor(data) {
+    super(data);
+    // ...register defs, seed initial state...
+    this.layers = createChubLayers({
+      messageState: data.messageState as any, chatState: data.chatState as any, initState: data.initState as any,
+    });
+    this.store = new PersistenceStore({
+      inv: shard("inv", this.inv, (i) => i.toJSON(), (d: ReturnType<Inventory["toJSON"]>) => Inventory.fromJSON(d),
+        this.layers.messageStateBackend, chubTreeHistory()),       // per-branch
+      body: shard("body", this.body, (i) => i.toJSON(), (d: ReturnType<Body["toJSON"]>) => Body.fromJSON(d),
+        this.layers.chatStateBackend, forbidBranching(snapshotHistory())), // canon
+      rng: shard("rng", this.rng, (i) => i.toJSON(), (d: ReturnType<Rng["toJSON"]>) => Rng.fromJSON(d),
+        this.layers.initStateBackend, noHistory()),                // set-once
+    });
+    this.bound = bindStore<Chat, Msg>(this.store, { layers: this.layers });
+  }
+
+  async load() {
+    await this.store.load();
+    const { chatState, messageState } = await this.bound.initial();
+    return { success: true, error: null, initState: null, chatState, messageState };
+  }
+  async setState(s) { await this.bound.setState(s); }
+  async beforePrompt(msg) {
+    /* your prose work — produce stageDirections, modifiedMessage, etc. */
+    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
+  }
+  async afterResponse(msg) {
+    /* your post-response work */
+    return mergeResponses({ modifiedMessage }, await this.bound.afterResponse(msg));
+  }
+}
+```
+
+In the recipes below, the persistence wiring is elided after recipe 1.
+Refer back to this section for the boilerplate.
+
+---
+
 ## 1. Inventory
 
 Spot-based stacks; carry-class semantics; accessibility-aware retrieval. The
