@@ -85,3 +85,9 @@ See `src/lib/COMPOSITION.md` for the positioning rationale. Summary: every `PATT
 Each composer is 90% wiring + 10% defaults; no private state; no new mechanics. The 7-games examples (CCA, Zork, HHGTTG, TiTS-shape, CoC-shape, LT-shape, FS-shape) are downstream of this — they're catalogs of which patterns each game uses.
 
 This work is queued behind: world/actor/intent/scene primitives, the synergy-pattern mining run, and any TiTS/LT prior-art mining for scene composition.
+
+## Game engine substrate
+
+Major scope expansion 2026-05-23: Waves 2E (UI), 2F (3D), 2G (realtime sensory), 2H (character controllers + AI / pathfinding) added to ROADMAP.md. Library is now a chub-stage game engine with modular packaging (dynamic imports per substrate module). Game catalog expanded to 16 shapes including FPS, ARPG, Souls, platformer, spacesim, RTS, walking-sim.
+
+See `src/lib/ROADMAP.md` Waves 2E–2H and Modular packaging strategy.
