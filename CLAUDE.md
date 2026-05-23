@@ -53,6 +53,21 @@ Stage class lives in `src/Stage.tsx`, extends `StageBase<InitStateType, ChatStat
 
 `Message`: `{ content: string, anonymizedId: string, isBot: boolean }`.
 
+## Composing primitives
+
+Stages compose primitives from `src/lib/` rather than re-implement inventory,
+body state, combat, or LLM-bridge plumbing. The library is a toolbox, not a
+framework — your Stage still `extends StageBase`, but its hooks delegate to
+small composable modules (`Body`, `Inventory`, `EffectStore`,
+`RealtimeWorld`, `assembleObservations`, …).
+
+The autonomous loop's first move on a fresh task is to read
+`src/lib/REFERENCE.md` and pick the closest recipe in `src/lib/PATTERNS.md`.
+Reach for raw `StageBase` only when no primitive fits — the philosophy doc
+`src/lib/README.md` explains the nine rules every primitive obeys, which
+also bound when a new primitive is warranted versus when ad-hoc stage code
+should remain ad-hoc.
+
 ### Three state layers — pick correctly
 
 | Layer | Lifetime | Use for |

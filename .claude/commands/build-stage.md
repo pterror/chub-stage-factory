@@ -15,6 +15,8 @@ This command runs `/loop` self-paced with the iteration below.
 
 Read `DESIGN.md` and `STATUS.md`. If `STATUS.md` has no task list yet, generate one from `DESIGN.md` and write it before doing anything else.
 
+On the **first iteration only**, before generating the task list: read `src/lib/REFERENCE.md` and the `PATTERNS.md` recipe named in `DESIGN.md`'s "Primitives used" section. The task list and every implementation step compose primitives from `src/lib/` — write raw `StageBase` code only when no primitive fits.
+
 Pick the next unchecked task. Implement it — `src/Stage.tsx`, `src/TestRunner.tsx`, `public/chub_meta.yaml`, whatever the task requires. Where `DESIGN.md` is ambiguous, decide and record the decision under "decisions made autonomously" in `STATUS.md`. The user is not available; freezing on ambiguity is worse than a recorded choice.
 
 Run `yarn build`. Don't skip it. A broken build is a wasted deploy slot.

@@ -53,6 +53,18 @@ The spec for this stage. Filled out during Phase 1 (co-design) and treated as au
 |-------|------|---------|-------------|
 | | | | |
 
+## Primitives used
+
+<!-- Which `src/lib/` modules this stage composes, and which PATTERNS.md
+recipe is closest. Filled during Phase 1; consulted in Phase 2 as the first
+read after DESIGN.md / STATUS.md. -->
+
+| Primitive | Used for |
+|-----------|----------|
+| | |
+
+Recipe (closest): <!-- inventory | tits-body | cyber-slot | turn-combat | buffs-effects | realtime-combat | physics | none-fits -->
+
 ## Test scenarios
 
 <!-- 3+ specific flows for src/TestRunner.tsx. Each should describe inputs, expected state transitions, and observable output. -->
