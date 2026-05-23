@@ -13,6 +13,15 @@
  * speaking through tags. If it were really hard, the primitives would
  * have failed the dogfood test.
  *
+ * PlaceholderRegistry demo: the MODS catalog is a PlaceholderRegistry.
+ * The player can emit `<invent>head|torso</invent>` to commission Maven
+ * to fabricate a new cyberware mod. The stage registers a placeholder
+ * under a fresh id (so available_equip surfaces it with pending=true
+ * next turn), kicks off generator.textGen, parses the response into an
+ * EquipmentDef, and calls MODS.replace(id, real). Inventory of available
+ * mods grows mid-chat without a parallel pending-map and without the
+ * stage owning generation orchestration outside the registry primitive.
+ *
  * Primitives: body, transformation, equipment, inventory, combat-turn,
  * effects, observation, prose-register, tag-parser, chub-adapters, rng,
  * persistence.
@@ -216,6 +225,67 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
     return { tags, effects };
   }
 
+  /**
+   * PlaceholderRegistry demo. Player triggers <invent>slot</invent>; we
+   * register a placeholder MOD immediately (so available_equip surfaces
+   * it as pending=true to the LLM next turn), fire off a textGen, parse
+   * the response into an EquipmentDef, and call MODS.replace(id, def).
+   * Any callsite that already `await`ed `MODS.waitFor(id)` resolves with
+   * the real def — no parallel pending-map needed.
+   *
+   * Live-LLM verification limited by the dev TestStageRunner harness; the
+   * static-typecheck and build-all-examples passes confirm the wiring is
+   * sound. The integration runs end-to-end inside Chub at deploy time.
+   */
+  private inventCyberware(slot: string, now: number): string {
+    const id = `cw_${now}_${this.rng.cosmetic.next()}`;
+    MODS.registerPlaceholder(id, eqFromDict({
+      id, slot, constraints: [],
+      onConflict: "unequip", grantsTags: [],
+      displayName: `(Maven fabricating ${slot} mod...)`,
+    }));
+    // Fire and forget; the replace call resolves any prior waitFor.
+    void this.generateCyberware(id, slot);
+    return id;
+  }
+
+  private async generateCyberware(id: string, slot: string): Promise<void> {
+    const prompt = [
+      "You are inventing a single piece of cyberpunk cyberware for slot: " + slot + ".",
+      "Reply with ONLY a JSON block inside <mod>...</mod>:",
+      `<mod>{"displayName":"...", "constraints":["tag-needed", "!incompatible-tag"], "grantsTags":["granted"]}</mod>`,
+      "constraints are tag predicates ('!' prefix negates); grantsTags are added to the body when equipped.",
+    ].join("\n");
+    try {
+      const resp = await this.generator.textGen({ prompt, max_tokens: 200 });
+      const body = resp?.result ?? "";
+      const m = /<mod>([\s\S]*?)<\/mod>/i.exec(body);
+      if (!m) { this.failInvent(id); return; }
+      const parsed = JSON.parse(m[1]) as { displayName?: string; constraints?: string[]; grantsTags?: string[] };
+      const real = eqFromDict({
+        id, slot,
+        constraints: parsed.constraints ?? [],
+        onConflict: "unequip",
+        grantsTags: parsed.grantsTags ?? [],
+        displayName: parsed.displayName ?? id,
+      });
+      MODS.replace(id, real);
+    } catch {
+      this.failInvent(id);
+    }
+  }
+
+  private failInvent(id: string): void {
+    // Resolve with a no-op def so any waiters don't hang; mark the
+    // displayName so the LLM sees the failure in available_equip.
+    const slot = MODS.get(id)?.slot ?? "head";
+    MODS.replace(id, eqFromDict({
+      id, slot, constraints: ["__unfabricable__"],
+      onConflict: "unequip", grantsTags: [],
+      displayName: "(fabrication failed)",
+    }));
+  }
+
   private buildCombat() {
     const { tags, effects } = this.grantsForEquipped();
     this.combatantsHolder.cs = buildCombatants(tags, effects, this.tick.n);
@@ -291,10 +361,14 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
     const prefix = this.tick.mode === "shop"
       ? "Maven runs the clinic. Tags she understands from you (the LLM): " +
         "`<install>install_neural_port|install_spinal_port|fleshweave</install>`, " +
-        "`<equip>deckjack|reflex_booster</equip>`, `<unequip>head|torso</unequip>`, " +
+        "`<equip>deckjack|reflex_booster|...</equip>` (any id in available_equip; entries " +
+        "with pending=true are still being fabricated), `<unequip>head|torso</unequip>`, " +
         "`<take>deckjack|reflex_booster|stim</take>` (from counter or locker to pocket), " +
-        "`<start_combat>true</start_combat>` to draw on the scav waiting at the door. " +
-        "If equipment violations exist, surface them in prose before any action."
+        "`<invent>head|torso</invent>` to commission Maven to fabricate a NEW cyberware mod " +
+        "for that slot — she'll spin up a placeholder you can see in available_equip and " +
+        "fill it in over the next message. `<start_combat>true</start_combat>` to draw on " +
+        "the scav waiting at the door. If equipment violations exist, surface them in prose " +
+        "before any action."
       : "Combat with the scav. To pick the player's action emit `<action>swing|hack</action>` " +
         "(hack requires jacked-in-capable tag). Last-events lists what just happened — " +
         "render it; do not invent hits.";
@@ -309,15 +383,16 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
 
   async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     const now = this.tick.n;
-    const [r1, r2, r3, r4, r5, r6] = parseTagsBatch(botMessage.content, [
+    const [r1, r2, r3, r4, r5, r6, r7] = parseTagsBatch(botMessage.content, [
       { install: { kind: "string", enum: TFS.keys() } },
       { equip: { kind: "string" } },
       { unequip: { kind: "string", enum: ["head", "torso"] } },
       { take: { kind: "string" } },
       { start_combat: { kind: "bool" } },
       { action: { kind: "string", enum: ["swing", "hack"] } },
+      { invent: { kind: "string", enum: ["head", "torso"] } },
     ]);
-    const text = r6.stripped;
+    const text = r7.stripped;
 
     if (this.tick.mode === "shop") {
       if (typeof r1.parsed.install === "string" && r1.parsed.install) {
@@ -348,6 +423,11 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
             this.tick.lastAction = `took:${r4.parsed.take}`;
           }
         }
+      }
+      if (typeof r7.parsed.invent === "string" && r7.parsed.invent) {
+        const slot = r7.parsed.invent as string;
+        const id = this.inventCyberware(slot, now);
+        this.tick.lastAction = `inventing:${id}`;
       }
       if (r5.parsed.start_combat === true) {
         this.tick.mode = "combat";
