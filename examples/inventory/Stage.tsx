@@ -22,7 +22,7 @@ import { Inventory, Stack } from "../../src/lib/inventory";
 import { ObservationSource, assembleObservations } from "../../src/lib/observation";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import {
-  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shard,
+  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }
@@ -67,7 +67,7 @@ export class InventoryStage extends StageBase<InitStateType, ChatStateType, Mess
     });
     this.store = new PersistenceStore({
       tick: shard("tick", this.tick, (i) => i.n, (d: number) => ({ n: d }), this.layers.messageStateBackend, chubTreeHistory()),
-      inv: shard("inv", this.inv, (i) => i.toJSON(), (d: ReturnType<Inventory["toJSON"]>) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
+      inv: shardOf("inv", this.inv, (d) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
     });
     this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
   }

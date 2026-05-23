@@ -23,7 +23,7 @@ import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
-  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shard,
+  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, shard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }
@@ -73,7 +73,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
     });
     this.pStore = new PersistenceStore({
       tick: shard("tick", this.tick, (i) => i.n, (d: number) => ({ n: d }), this.layers.messageStateBackend, chubTreeHistory()),
-      effects: shard("effects", this.store, (i) => i.toJSON(), (d: ReturnType<EffectStore["toJSON"]>) => EffectStore.fromJSON(d, TINCTURES), this.layers.messageStateBackend, chubTreeHistory()),
+      effects: shardOf("effects", this.store, (d) => EffectStore.fromJSON(d, TINCTURES), this.layers.messageStateBackend, chubTreeHistory()),
     });
     this.bound = bindStore<ChatStateType, MessageStateType>(this.pStore, { layers: this.layers });
   }

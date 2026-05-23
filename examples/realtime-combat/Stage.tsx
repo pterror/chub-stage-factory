@@ -27,7 +27,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
-  bindStore, mergeResponses, shard,
+  bindStore, mergeResponses, shard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; hp: number; [k: string]: unknown }
@@ -65,10 +65,7 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
     this.store = new PersistenceStore({
-      rng: shard("rng", this.rng,
-        (i) => i.toJSON(),
-        (d: ReturnType<Rng["toJSON"]>) => Rng.fromJSON(d),
-        this.layers.initStateBackend, noHistory()),
+      rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, hp: i.hp }),
         (d: { n: number; hp: number }) => ({ n: d.n, hp: d.hp }),

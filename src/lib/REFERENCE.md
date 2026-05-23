@@ -240,6 +240,7 @@ table and full example.
 ### `persistence/store.ts`
 - `interface SaveableState<M> { serialize, deserialize }`
 - `asSaveable(instance, toJSON, fromJSON): SaveableState<M>` — bridge existing primitives
+- `asSaveableClass(instance, fromJSON): SaveableState<M>` — infer M from `instance.toJSON()` return type; no annotation needed
 - `interface Shard<M> { name, state, backend, history }`
 - `class PersistenceStore { load(), commit(), saveSlot(name), loadSlot(name), listSlots(), navigateAll(idMap) }`
 
@@ -249,6 +250,7 @@ table and full example.
 - `bindStore(store, { layers }): { setState, beforePrompt, afterResponse, initial }`
 - `mergeResponses(a, b)` — compose Partial<StageResponse>s
 - `shard(name, instance, toJSON, fromJSON, backend, history): Shard<M>` — one-liner constructor
+- `shardOf(name, instance, fromJSON, backend, history): Shard<M>` — infer-friendly variant; calls `instance.toJSON()` automatically; use when `fromJSON` takes only the serialized data
 
 ## `replay.ts`
 

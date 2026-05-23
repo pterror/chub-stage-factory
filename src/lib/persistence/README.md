@@ -29,7 +29,7 @@ A stage author wires one stateful primitive in one `shard(...)` call. No `setSta
 ```ts
 import {
   createChubLayers, chubTreeHistory, forbidBranching, snapshotHistory, noHistory,
-  PersistenceStore, shard, bindStore, mergeResponses,
+  PersistenceStore, shardOf, shard, bindStore, mergeResponses,
 } from "../../src/lib/persistence";
 
 class MyStage extends StageBase<Init, Chat, Msg, Config> {
@@ -49,9 +49,16 @@ class MyStage extends StageBase<Init, Chat, Msg, Config> {
       initState: data.initState as any ?? null,
     });
     this.store = new PersistenceStore({
-      inv: shard("inv", this.inv, (i) => i.toJSON(), (d) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
-      body: shard("body", this.body, (i) => i.toJSON(), (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-      rng: shard("rng", this.rng, (i) => i.toJSON(), (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
+      // shardOf: calls instance.toJSON() automatically; M inferred — no annotation needed.
+      inv:  shardOf("inv",  this.inv,  (d) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
+      body: shardOf("body", this.body, (d) => Body.fromJSON(d),      this.layers.chatStateBackend,    forbidBranching(snapshotHistory())),
+      rng:  shardOf("rng",  this.rng,  (d) => Rng.fromJSON(d),       this.layers.initStateBackend,    noHistory()),
+      // shard: escape hatch when fromJSON needs extra args (e.g. a def catalog).
+      //   M is still inferred from toJSON; annotate d only when fromJSON is overloaded.
+      loadout: shard("loadout", this.loadout,
+        (i) => i.toJSON(),
+        (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS),
+        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
     });
     this.bound = bindStore(this.store, { layers: this.layers });
   }
@@ -73,23 +80,13 @@ class MyStage extends StageBase<Init, Chat, Msg, Config> {
 }
 ```
 
-## TypeScript hint: `JsonOf<T>`
+## Choosing `shardOf` vs `shard`
 
-Because `shard(name, instance, toJSON, fromJSON, ...)` infers `M` from
-`toJSON`'s return type, the `fromJSON` parameter usually needs an
-explicit annotation when the primitive's static `fromJSON` has a strict
-signature (e.g. `Inventory.fromJSON(data: { defs: ItemDef[]; ... })`).
-The idiom:
-
-```ts
-shard("inv", this.inv,
-  (i) => i.toJSON(),
-  (d: ReturnType<Inventory["toJSON"]>) => Inventory.fromJSON(d),
-  this.layers.messageStateBackend, chubTreeHistory())
-```
-
-This is verbose but it keeps the shard helper a one-liner without a
-parallel `JsonOf<T>` helper that would couple every primitive's name.
+| situation | use |
+|---|---|
+| primitive has `toJSON()` / `static fromJSON(data)` | `shardOf` — infers M, no annotation |
+| `fromJSON` needs extra args (def catalog, body ref) | `shard` with explicit annotation on `d` |
+| custom toJSON shape (not `instance.toJSON()`) | `shard` |
 
 ## What this does NOT do
 

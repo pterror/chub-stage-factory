@@ -202,3 +202,16 @@ export function shard<T extends object, M>(
     history,
   };
 }
+
+/** Convenience wrapper around `shard` for classes with `toJSON()`.
+ *  Calls `instance.toJSON()` automatically; M is inferred from its
+ *  return type. Eliminates the `ReturnType<T["toJSON"]>` annotation. */
+export function shardOf<T extends { toJSON(): any }>(
+  name: string,
+  instance: T,
+  fromJSON: (data: ReturnType<T["toJSON"]>) => T,
+  backend: SaveBackend,
+  history: History<ReturnType<T["toJSON"]>>,
+): Shard<ReturnType<T["toJSON"]>> {
+  return shard(name, instance, (i) => i.toJSON() as ReturnType<T["toJSON"]>, fromJSON, backend, history);
+}

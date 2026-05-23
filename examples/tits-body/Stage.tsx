@@ -27,7 +27,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
-  bindStore, mergeResponses, shard,
+  bindStore, mergeResponses, shard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; lastApplied?: string; [k: string]: unknown }
@@ -93,10 +93,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
         (i) => ({ n: i.n, lastApplied: i.lastApplied }),
         (d: { n: number; lastApplied?: string }) => ({ n: d.n, lastApplied: d.lastApplied }),
         this.layers.messageStateBackend, chubTreeHistory()),
-      body: shard("body", this.body,
-        (i) => i.toJSON(),
-        (d: ReturnType<Body["toJSON"]>) => Body.fromJSON(d),
-        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      body: shardOf("body", this.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
       snaps: shard("snaps", this.snaps,
         (i) => i.toJSON(),
         (d: ReturnType<Snapshots["toJSON"]>) => Snapshots.fromJSON(d, this.body),

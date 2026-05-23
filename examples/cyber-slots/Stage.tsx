@@ -26,7 +26,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
-  bindStore, mergeResponses, shard,
+  bindStore, mergeResponses, shard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; lastAction?: string; [k: string]: unknown }
@@ -83,10 +83,7 @@ export class CyberSlotsStage extends StageBase<InitStateType, ChatStateType, Mes
         (i) => ({ n: i.n, lastAction: i.lastAction }),
         (d: { n: number; lastAction?: string }) => ({ n: d.n, lastAction: d.lastAction }),
         this.layers.messageStateBackend, chubTreeHistory()),
-      body: shard("body", this.body,
-        (i) => i.toJSON(),
-        (d: ReturnType<Body["toJSON"]>) => Body.fromJSON(d),
-        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      body: shardOf("body", this.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
       loadout: shard("loadout", this.loadout,
         (i) => i.toJSON(),
         (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS),

@@ -59,6 +59,16 @@ export function asSaveable<T extends object, M>(
   };
 }
 
+/** Infer-friendly variant of `asSaveable` for classes with `toJSON()`.
+ *  M is inferred from T["toJSON"]'s return type — no explicit annotation
+ *  needed at the callsite. Use with `shardOf` for the cleanest wiring. */
+export function asSaveableClass<T extends { toJSON(): any }>(
+  instance: T,
+  fromJSON: (data: ReturnType<T["toJSON"]>) => T,
+): SaveableState<ReturnType<T["toJSON"]>> {
+  return asSaveable(instance, (i) => i.toJSON() as ReturnType<T["toJSON"]>, fromJSON);
+}
+
 export interface Shard<M> {
   name: string;
   state: SaveableState<M>;

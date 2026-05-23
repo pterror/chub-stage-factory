@@ -25,7 +25,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
-  bindStore, mergeResponses, shard,
+  bindStore, mergeResponses, shard, shardOf,
 } from "../../src/lib/persistence";
 
 interface TrajectoryStep { x: number; y: number; bounced: boolean }
@@ -58,10 +58,7 @@ export class PhysicsStage extends StageBase<InitStateType, ChatStateType, Messag
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
     this.store = new PersistenceStore({
-      rng: shard("rng", this.rng,
-        (i) => i.toJSON(),
-        (d: ReturnType<Rng["toJSON"]>) => Rng.fromJSON(d),
-        this.layers.initStateBackend, noHistory()),
+      rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, lastTraj: i.lastTraj }),
         (d: { n: number; lastTraj?: TrajectoryStep[] }) => ({ n: d.n, lastTraj: d.lastTraj }),

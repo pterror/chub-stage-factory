@@ -44,7 +44,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching, noHistory,
-  bindStore, mergeResponses, shard,
+  bindStore, mergeResponses, shard, shardOf,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; mode: "shop" | "combat" | "ended"; lastAction?: string; [k: string]: unknown }
@@ -166,13 +166,13 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
     this.store = new PersistenceStore({
-      rng: shard("rng", this.rng, (i) => i.toJSON(), (d: ReturnType<Rng["toJSON"]>) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
+      rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, mode: i.mode, lastAction: i.lastAction }),
         (d: { n: number; mode: "shop" | "combat" | "ended"; lastAction?: string }) => ({ n: d.n, mode: d.mode, lastAction: d.lastAction }),
         this.layers.messageStateBackend, chubTreeHistory()),
-      inv: shard("inv", this.inv, (i) => i.toJSON(), (d: ReturnType<Inventory["toJSON"]>) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
-      body: shard("body", this.body, (i) => i.toJSON(), (d: ReturnType<Body["toJSON"]>) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      inv: shardOf("inv", this.inv, (d) => Inventory.fromJSON(d), this.layers.messageStateBackend, chubTreeHistory()),
+      body: shardOf("body", this.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
       loadout: shard("loadout", this.loadout, (i) => i.toJSON(), (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
       combatants: shard("combatants", this.combatantsHolder,
         (h) => snapCombatants(h),

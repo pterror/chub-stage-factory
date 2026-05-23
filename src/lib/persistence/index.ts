@@ -31,7 +31,7 @@ export {
 } from "./history";
 
 export type { SaveableState, Shard } from "./store";
-export { asSaveable, PersistenceStore } from "./store";
+export { asSaveable, asSaveableClass, PersistenceStore } from "./store";
 
 export type { BindStoreOptions, BoundStore } from "./chub";
 export {
@@ -40,4 +40,5 @@ export {
   bindStore,
   mergeResponses,
   shard,
+  shardOf,
 } from "./chub";
