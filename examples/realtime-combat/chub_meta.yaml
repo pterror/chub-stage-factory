@@ -1,0 +1,14 @@
+project_name: "Arena Drone Fight"
+tagline: "Tick-based realtime combat with projectiles and spatial hash."
+visibility: 'UNLISTED'
+position: 'ADJACENT'
+tags: ['Stage', 'Example', 'Combat', 'Realtime']
+config_schema: { type: object, properties: {} }
+state_schema:
+  init: { type: object, properties: {} }
+  message:
+    type: object
+    properties:
+      ticks: { type: integer, default: 0 }
+      hp: { type: integer, default: 30 }
+  chat: { type: object, properties: {} }

@@ -23,6 +23,8 @@ import { CyberSlotsStage } from "./cyber-slots/Stage";
 import cyberSlotsInit from "./cyber-slots/test-init.json";
 import { PhysicsStage } from "./physics/Stage";
 import physicsInit from "./physics/test-init.json";
+import { RealtimeCombatStage } from "./realtime-combat/Stage";
+import realtimeCombatInit from "./realtime-combat/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -83,6 +85,14 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: ["physics", "rng", "observation"],
     factory: (d) => new PhysicsStage(d),
     testInit: physicsInit,
+  },
+  {
+    name: "realtime-combat",
+    label: "Realtime combat — arena drone fight",
+    description: "RealtimeWorld with bullet attacks and spawning drone wave.",
+    primitives: ["combat-realtime", "physics", "rng"],
+    factory: (d) => new RealtimeCombatStage(d),
+    testInit: realtimeCombatInit,
   },
 ];
 

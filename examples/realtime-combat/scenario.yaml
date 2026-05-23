@@ -1,0 +1,4 @@
+name: "Arena"
+characters:
+  - '@characters/arena-ai.yaml'
+scenario: "An underground combat arena. The pilot at centre; drones inbound on a circle."
