@@ -68,6 +68,39 @@ class MyStage extends StageBase<Init, Chat, Msg, Cfg> {
 In the recipes below, the persistence wiring is elided after recipe 1.
 Refer back to this section for the boilerplate.
 
+## 0a. Def catalogs — `Registry<T>` over `Record<Id, T>`
+
+Every recipe below declares a def catalog (TFS, MODS, EFFECT_DEFS,
+ITEM_DEFS, ACTION_DEFS). For static catalogs use `Registry<T>`:
+
+```ts
+import { Registry } from "./lib/registry";
+const TFS = new Registry<TransformationDef>()
+  .register("cat_tail", { /* ... */ } as TransformationDef);
+const def = TFS.require("cat_tail");
+TFS.keys();  // for parseTags enum
+TFS.values();
+```
+
+For dynamic catalogs (grow mid-chat, LLM invents items) wrap in a
+Shard and pick paradigm. For LLM-authored content invented during
+generation, use `PlaceholderRegistry<T>` — `registerPlaceholder(id, stub)`,
+`replace(id, real)`, `waitFor(id, timeoutMs?)`. See `REGISTRY.md`.
+
+## 0b. Event feeds — `Timeline<E>` over `events: E[]`
+
+Recipes 4, 5, 6 (and any other with `events.push(...)`) want a
+`Timeline<E>` instead. It owns the buffer, time/count windowing, and
+implements `ObservationSource<unknown>` directly so the "last N
+events" channel is one entry in `sources` rather than a hand-rolled
+source. See `TIMELINE.md`.
+
+## 0c. Reputation / faction
+
+A `Stat` with `tier()` from `stats.ts` is the reputation score;
+gated content is a predicate over the tier label. No separate
+Faction primitive — it reduces.
+
 ---
 
 ## 1. Inventory

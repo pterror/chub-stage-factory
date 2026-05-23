@@ -173,6 +173,34 @@ lookup after you know what you're looking for.
 - `assembleObservations(sources, state, opts): AssembledObservation[]`
 - `formatObservations(observed): string` — fenced JSON block
 
+## `registry.ts`
+
+- `class Registry<T>`
+  - `constructor(initial?: Iterable<[string, T]> | Record<string, T>)`
+  - `register(id, value): this`, `get(id)`, `require(id)`, `has(id)`
+  - `size()`, `delete(id)`, `keys()`, `values()`, `entries()`
+  - `filter(pred): T[]`, `map(fn): U[]`
+  - `with(id, value): Registry<T>` — immutable add/overwrite
+  - `toJSON(): Record<string, T>`, `static fromJSON(data)`
+- `class PlaceholderRegistry<T> extends Registry<T>`
+  - `registerPlaceholder(id, placeholder): this`
+  - `replace(id, real): void` — resolves any pending `waitFor`
+  - `isPlaceholder(id): boolean`
+  - `waitFor(id, timeoutMs?): Promise<T>` — resolves immediately if real
+
+## `timeline.ts`
+
+- `interface TimelineEvent<E> { at, payload }`
+- `interface TimelineObservationOptions<E> { id?, channels?, channel?, key?, windowSize?, saliencePer?, habituationTau?, render? }`
+- `class Timeline<E> implements ObservationSource<unknown>`
+  - `constructor(opts?)`
+  - `push(payload, at?)`, `pushAll(events)`
+  - `since(t)`, `until(t)`, `between(t0, t1)`, `window(n)`, `windowSince(t, n?)`
+  - `all()`, `count()`, `last()`, `clear(beforeTime?): number`
+  - `id`, `channels`, `salience`, `properties`, `habituationTau?` — ObservationSource surface
+  - `toJSON(): TimelineEvent<E>[]`, `static fromJSON(data, opts?)`
+- `summarize(events, render): string` — newline-joined; debug pane only
+
 ## `prose-register.ts`
 
 - `type ArchitectureName` (10 entries; see PROSE.md)

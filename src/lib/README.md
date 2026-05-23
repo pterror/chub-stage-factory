@@ -114,6 +114,16 @@ This is the shape every primitive in the library aims for. If you find
 yourself writing `if (mode === "tree") ... else if (mode === "linear")`,
 you are reaching for a strategy enum where a wrapper would do.
 
+Two further composition handles worth naming. A `Registry<T>` is the
+catalog every stage rolls as `Record<Id, T>` (TFS, MODS, EFFECT_DEFS);
+its `PlaceholderRegistry` variant adds an async-swap surface for the
+"LLM is currently inventing this thing" flow — `registerPlaceholder` +
+`replace` + `waitFor`, persisted as a Shard so the invention survives
+the chat. A `Timeline<E>` is the append-only event log every stage
+rolls as `events: E[] = []`; it implements `ObservationSource<unknown>`
+directly so adding "recent events" to the LLM payload is one entry in
+the sources list rather than a hand-rolled adapter.
+
 ## File-shape contract
 
 Each `*.ts` file under `src/lib/`:
