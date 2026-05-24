@@ -1,0 +1,11 @@
+name: "A Small Settlement"
+characters:
+  - '@characters/elder-mira.yaml'
+  - '@characters/innkeeper-holt.yaml'
+  - '@characters/merchant-vas.yaml'
+scenario: |
+  A quiet settlement on a road less travelled. Three locations — the village
+  square, an inn to the north, and a small market to the east. The world has
+  structure; your choices change it. Speak to the elder in the square. Trade
+  at the market. Rest at the inn. The engine tracks everything; the LLM
+  renders what matters.

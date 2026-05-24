@@ -27,6 +27,8 @@ import { RealtimeCombatStage } from "./realtime-combat/Stage";
 import realtimeCombatInit from "./realtime-combat/test-init.json";
 import { CompositeShowcaseStage } from "./composite-showcase/Stage";
 import compositeInit from "./composite-showcase/test-init.json";
+import { WorldPrimaryStage } from "./world-primary/Stage";
+import worldPrimaryInit from "./world-primary/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -107,6 +109,19 @@ export const EXAMPLES: ExampleEntry[] = [
     ],
     factory: (d) => new CompositeShowcaseStage(d),
     testInit: compositeInit,
+  },
+  {
+    name: "world-primary",
+    label: "World-primary — the just-good RP frontend",
+    description: "State-first RP frontend: structured verbs + freeform escape hatch + renderer/oracle split.",
+    primitives: [
+      "intent", "context", "llm-pipeline", "trigger", "predicate",
+      "patterns/render-trigger", "patterns/freeform-pipeline",
+      "ui/WorldStatePanel", "ui/ActionSurface", "ui/ScenePane",
+      "ui/ChatLogSidebar", "ui/FreeformInput",
+    ],
+    factory: (d) => new WorldPrimaryStage(d),
+    testInit: worldPrimaryInit,
   },
 ];
 

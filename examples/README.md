@@ -52,3 +52,4 @@ secret.
 | `physics` | AABB/circle collision sandbox | §7 Physics |
 | `realtime-combat` | tick-based spatial combat | §6 Realtime combat |
 | `composite-showcase` | cyberpunk clinic combining many | §1+§2+§3+§4+§5 |
+| `world-primary` | world-state-primary RP frontend shape | FRONTEND-SHAPE.md |

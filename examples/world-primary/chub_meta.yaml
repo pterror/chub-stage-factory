@@ -1,0 +1,57 @@
+project_name: "World-Primary — the just-good RP frontend shape"
+tagline: "Imagine a coherent world, but infinite — state first, prose second, no chat-log drift."
+creator_notes: "Reference stage for the chub-stage-factory world-primary frontend design. Demonstrates renderTrigger, freeformPipeline, and the five-layer structure model from src/lib/design/FRONTEND-SHAPE.md."
+visibility: 'UNLISTED'
+position: 'FULLSCREEN'
+tags:
+  - 'Stage'
+  - 'Example'
+  - 'WorldPrimary'
+  - 'RoleplayFrontend'
+
+config_schema:
+  type: object
+  properties: {}
+
+state_schema:
+  init:
+    type: object
+    nullable: true
+    properties: {}
+  message:
+    type: object
+    properties:
+      locationId:
+        type: string
+        default: 'village-square'
+      relations:
+        type: object
+        additionalProperties:
+          type: number
+      inventory:
+        type: array
+        items:
+          type: string
+      turnCount:
+        type: integer
+        default: 0
+      lastProse:
+        type: string
+      triggerState:
+        type: object
+      flags:
+        type: object
+  chat:
+    type: object
+    properties:
+      log:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+            prose:
+              type: string
+            turnLabel:
+              type: string
