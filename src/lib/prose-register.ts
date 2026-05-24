@@ -117,6 +117,12 @@ export const ARCHITECTURES: Record<ArchitectureName, { summary: string; example:
   },
 };
 
+/** Re-export of `proseRegisterContributor` from `context.ts` so a stage
+ *  that already imports prose-register can pull the ContextAssembler
+ *  adapter from the same module. Canonical definition lives in
+ *  `context.ts` alongside the other built-in contributors. */
+export { proseRegisterContributor } from "./context";
+
 export function proseInstructions(opts: {
   architectures: readonly ArchitectureName[];
   register: RegisterSpec;

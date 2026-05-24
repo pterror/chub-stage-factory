@@ -191,6 +191,7 @@ lookup after you know what you're looking for.
 - `interface AssembleOptions { now, maxCount?, lastEmittedAt? }`
 - `assembleObservations(sources, state, opts): AssembledObservation[]`
 - `formatObservations(observed): string` — fenced JSON block
+- `asContributor(sources, options?): ContextContributor` — wraps one source or an array (alias of `observationContributor` from `context.ts`)
 
 ## `registry.ts`
 
@@ -240,6 +241,7 @@ lookup after you know what you're looking for.
   - `all()`, `count()`, `last()`, `clear(beforeTime?): number`
   - `id`, `channels`, `salience`, `properties`, `habituationTau?` — ObservationSource surface
   - `toJSON(): TimelineEvent<E>[]`, `static fromJSON(data, opts?)`
+  - `asContributor({ window, id?, priority?=30, optional?=true, render? }): ContextContributor`
 - `summarize(events, render): string` — newline-joined; debug pane only
 
 ## `predicate.ts`
@@ -267,6 +269,7 @@ lookup after you know what you're looking for.
 - `interface RegisterSpec { pov, tense, distance, extras? }`
 - `ARCHITECTURES: Record<ArchitectureName, { summary, example }>`
 - `proseInstructions({architectures, register: RegisterSpec}): string`
+- `proseRegisterContributor(opts)` — re-export of context.ts factory
 - (no preset catalog ships; construct `RegisterSpec` inline at the callsite)
 
 ## `chat-window.ts`

@@ -52,10 +52,13 @@
  *     id; channels; salience; properties; habituationTau?
  *     toJSON(): TimelineEvent<E>[]
  *     static fromJSON<E>(data, opts?): Timeline<E>
+ *     asContributor(opts: { window; id?; priority?; optional?; render? }): ContextContributor
  *
  *   summarize<E>(events, render): string       // newline-joined render
  */
 
+import type { ContextContributor, Section } from "./context";
+import { estimateTokens } from "./context";
 import type { Channel, Evaluator, Key, ObservationSource } from "./observation";
 
 export interface TimelineEvent<E> {
@@ -197,6 +200,34 @@ export class Timeline<E> implements ObservationSource<any> {
     const t = new Timeline<E>(opts);
     t.pushAll(data);
     return t;
+  }
+
+  /** Adapter to the ContextAssembler protocol. Same behavior as
+   *  `timelineContributor(this, opts)` from `context.ts`; the instance
+   *  method form is the canonical one-call surface for stages that
+   *  already hold the Timeline. */
+  asContributor(opts: {
+    window: number;
+    id?: string;
+    priority?: number;
+    optional?: boolean;
+    render?: (event: E, at: number) => string;
+  }): ContextContributor {
+    const id = opts.id ?? this.id;
+    const priority = opts.priority ?? 30;
+    const optional = opts.optional ?? true;
+    const render = opts.render ?? ((e: E, at: number) => `${at}: ${JSON.stringify(e)}`);
+    return {
+      id,
+      priority,
+      contribute: (): Section | null => {
+        const events = this.window(opts.window);
+        if (events.length === 0) return null;
+        const body = events.map((ev) => render(ev.payload, ev.at)).join("\n");
+        const content = `<recent-events>\n${body}\n</recent-events>`;
+        return { id, content, tokens: estimateTokens(content), optional };
+      },
+    };
   }
 }
 

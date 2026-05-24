@@ -36,6 +36,9 @@
  *   formatObservations(observed): string          // JSON-blocked, LLM-readable
  */
 
+import type { ContextContributor, ObservationContributorOptions } from "./context";
+import { observationContributor } from "./context";
+
 export type Channel = string;
 export type Key = string;
 export type Evaluator<S, V = unknown> = (state: S) => V;
@@ -105,6 +108,20 @@ export function assembleObservations<S>(
  * The stage typically prepends a short instruction (from prose-register) and
  * appends this to its stageDirections return value.
  */
+/** Wrap one or more `ObservationSource`s as a single `ContextContributor`.
+ *  Convenience alias for `observationContributor` from `context.ts`,
+ *  colocated with the source-side type so stages can import contributor
+ *  and sources from one place. Accepts a single source or an array. */
+export function asContributor<S = unknown>(
+  sources: ObservationSource<S> | readonly ObservationSource<S>[],
+  options?: ObservationContributorOptions<S>,
+): ContextContributor {
+  const list: readonly ObservationSource<S>[] = Array.isArray(sources)
+    ? sources
+    : [sources as ObservationSource<S>];
+  return observationContributor(list, options);
+}
+
 export function formatObservations(observed: readonly AssembledObservation[]): string {
   const compact = observed.map((o) => ({
     id: o.id,
