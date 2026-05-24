@@ -269,6 +269,37 @@ lookup after you know what you're looking for.
 - `proseInstructions({architectures, register: RegisterSpec}): string`
 - (no preset catalog ships; construct `RegisterSpec` inline at the callsite)
 
+## `chat-window.ts`
+
+- `type Turn = Message` (re-export of `@chub-ai/stages-ts` Message)
+- `interface ChatWindowOptions { id?, priority?=80, size, summarizeOlder? }`
+- `class ChatWindow implements ContextContributor`
+  - `id; priority; size`
+  - `constructor(opts)`
+  - `push(turn): Turn[]` — rolled-out turns (also fed to `summarizeOlder`)
+  - `pushAll(turns)`, `turns(): readonly Turn[]`, `last()`, `count()`, `clear()`
+  - `contribute(ctx): Section | null` — `<recent-turns>` block
+  - `toJSON(): Turn[]`, `static fromJSON(data, opts): ChatWindow`
+
+## `context.ts`
+
+- `interface Section { id, content, tokens, optional? }`
+- `interface AssemblyContext { budget, turnInputMessage?, stage? }`
+- `interface ContextContributor { id, priority, contribute(ctx): Section | null }`
+- `estimateTokens(text): number` — coarse `chars / 4` heuristic
+- `class ContextAssembler`
+  - `contributors: ContextContributor[]; budget: number`
+  - `constructor({ budget?=4000, contributors? })`
+  - `register(c): this` — replaces by id
+  - `unregister(id): boolean`
+  - `assemble(ctx?): string` — drop-then-allocate: required always; optional fills budget
+- `observationContributor(sources, { id?, priority?=50, optional?=true, state?, assembleOptions? })`
+- `timelineContributor(timeline, { id?, priority?=30, optional?=true, window, render? })`
+- `chatWindowContributor(window)` — identity (ChatWindow IS one)
+- `proseRegisterContributor({ id?, priority?=70, optional?=false, architectures, register })`
+- `systemInstructionsContributor(text, { id?, priority?=100, optional?=false })`
+- `turnInputContributor({ id?, priority?=90, optional?=false })`
+
 ## `tag-parser.ts`
 
 - `type FieldKind = "string" | "int" | "float" | "bool" | "list"`
