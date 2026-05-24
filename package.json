@@ -24,19 +24,24 @@
     "@typescript-eslint/parser": "^7.4.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "vite-plugin-dts": "^3.9.1"
+    "vite-plugin-dts": "^3.9.1",
+    "d3-weighted-voronoi": "^1.1.3"
   },
   "engines": {
     "node": "21.7.1"
   },
   "devDependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
+    "@types/three": "^0.184.0",
     "@vitejs/plugin-react": "^4.2.1",
     "eslint": "^8.57.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.6",
     "sass": "^1.72.0",
+    "three": "^0.184.0",
     "typescript": "^5.2.2",
     "vite": "^5.2.0"
   },
@@ -45,5 +50,15 @@
       "import": "./dist/index.js",
       "require": "./dist/index.umd.cjs"
     }
+  },
+  "peerDependencies": {
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0",
+    "three": "^0.184.0"
+  },
+  "peerDependenciesMeta": {
+    "@react-three/drei": {"optional": true},
+    "@react-three/fiber": {"optional": true},
+    "three": {"optional": true}
   }
 }
