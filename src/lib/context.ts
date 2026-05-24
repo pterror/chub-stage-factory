@@ -43,7 +43,9 @@
  *      contributors via `register` and call `assemble` once per turn.
  *
  * SHAPE:
- *   interface Section { id; content; tokens; optional? }
+ *   type SectionPosition = 'top' | 'bottom' | { depth: number }
+ *   type SectionRole = 'system' | 'user' | 'assistant'
+ *   interface Section { id; content; tokens; optional?; position?; role? }
  *   interface AssemblyContext { budget; turnInputMessage?; stage? }
  *   interface ContextContributor
  *     { id; priority; contribute(ctx): Section | null }
@@ -73,6 +75,20 @@ import {
 import { type ArchitectureName, proseInstructions, type RegisterSpec } from "./prose-register";
 import { summarize, type Timeline, type TimelineEvent } from "./timeline";
 
+/** Where a section is injected relative to other sections.
+ *  `'top'` is sugar for `{ depth: 0 }` (very high effective priority);
+ *  `'bottom'` is sugar for the default appending behaviour;
+ *  `{ depth: n }` requests injection at depth n from the bottom of the
+ *  optional layer (depth 0 = last, depth k = k sections from the end).
+ *  Surfaced for `positionalInjectionDepthPattern`. */
+export type SectionPosition = "top" | "bottom" | { depth: number };
+
+/** Chat-role tagging for providers that surface role-tagged messages.
+ *  The Chub host currently emits a single concatenated prompt string;
+ *  the field is informational for now and reserved for future role-aware
+ *  adapters. Carried through verbatim; never affects assembly order. */
+export type SectionRole = "system" | "user" | "assistant";
+
 export interface Section {
   id: string;
   content: string;
@@ -82,6 +98,14 @@ export interface Section {
   tokens: number;
   /** Droppable under budget pressure. Default false (required). */
   optional?: boolean;
+  /** Where this section sits relative to other sections in the final
+   *  output. Default `'bottom'` (legacy: priority-ordered, top-down).
+   *  `'top'` floats the section to the start; `{ depth: n }` injects it
+   *  n positions from the end. */
+  position?: SectionPosition;
+  /** Chat-role hint when the provider supports role-tagged messages.
+   *  Informational; assembly does not reorder by role. */
+  role?: SectionRole;
 }
 
 export interface AssemblyContext {
@@ -178,9 +202,38 @@ export class ContextAssembler {
       used += slot.section.tokens;
     }
 
-    // Emit in priority order (stable across required/optional partition).
+    // Default emit order: priority descending. Stable across required /
+    // optional partition because we resort the merged list.
     accepted.sort((a, b) => b.priority - a.priority);
-    return accepted.map((s) => s.section.content).join("\n\n").replace(/\n+$/, "");
+
+    // Apply Section.position when present. Strategy:
+    //   1. Partition into top / depth / default (no explicit position or
+    //      'bottom') buckets.
+    //   2. Emit `top` sections first (in priority order),
+    //   3. then `default`,
+    //   4. then splice each `depth` section into the resulting list at
+    //      `length - depth` (0 = end, 1 = one before end, ...).
+    const tops: Slot[] = [];
+    const defaults: Slot[] = [];
+    const depthed: { slot: Slot; depth: number }[] = [];
+    for (const slot of accepted) {
+      const pos = slot.section.position;
+      if (pos === "top") tops.push(slot);
+      else if (pos && typeof pos === "object" && "depth" in pos) {
+        depthed.push({ slot, depth: Math.max(0, pos.depth) });
+      } else {
+        defaults.push(slot);
+      }
+    }
+    const ordered: Slot[] = [...tops, ...defaults];
+    // Insert depth-positioned sections from largest depth first so each
+    // subsequent insertion's depth-from-end reading stays accurate.
+    depthed.sort((a, b) => b.depth - a.depth);
+    for (const { slot, depth } of depthed) {
+      const idx = Math.max(0, ordered.length - depth);
+      ordered.splice(idx, 0, slot);
+    }
+    return ordered.map((s) => s.section.content).join("\n\n").replace(/\n+$/, "");
   }
 }
 
