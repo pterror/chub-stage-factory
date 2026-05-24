@@ -174,6 +174,8 @@ procgen.recombine({
 
 Enables CoC-shape, TiTS-shape, LT-shape. **Mining required first** (see Mining queue): TiTS source + LT source + possibly FoE for scene-resolver prior art. Scene composition is the most under-theorized axis; only deep prior art exists in (notoriously messy) game sources.
 
+Design informed by mining of TiTS + Lilith's Throne scene systems — see `src/lib/mining/SCENE.md` for the full prior-art analysis.
+
 ### Wave 2B — parser-IF axis
 
 - **`src/lib/world.ts` — graph of places.** Rooms with named exits (n/s/e/w/up/down/in/out), objects+actors located at place, scope/visibility rules. Composes with `inventory` (objects as containers) + `actor` (located-at) + `observation` (scope = visible-from-here). ~300 LOC.
@@ -198,6 +200,8 @@ Zero new primitives; pure pattern composition.
 - **`src/lib/patterns/grafting.ts` — Helminth-style.** Transfer one ability/feature from collection A to collection B with provenance tracking.
 - **`src/lib/patterns/puppet.ts`** — actor-piloting-another-actor. Player's true-self is one Actor (`chatState` canon); currently-equipped form is another Actor instance (paradigm chosen by stage author). Memory + inventory + relationships persist on the true-self; abilities + appearance + body live on the form.
 
+Default contract + knob list derived from Warframe Helminth subsume mechanics — see `src/lib/mining/GRAFTING.md`.
+
 Parallel-developable with Waves 2A, 2B, 2C.
 
 ### Wave 2E — UI primitives
@@ -211,6 +215,8 @@ Components ship as `src/lib/ui/*.tsx`, prop-customizable (theme/colors/cell-rend
 - **`TileGrid<C>`** — 2D grid of cells; cell renderer + interaction callbacks. Pairs with grid-inventory; powers FC arcology layout, dungeon maps, inventory grid, station/floor plans.
 - **`HexGrid<C>`** — hex variant for tactical RPG combat grids.
 - **`VoronoiInfluenceMap<E>`** — circles-with-radii + intersection lines (per Lord-Raven's prior art; identification pending — see Mining queue). Encodes influence zones / faction territory / NPC awareness radii / threat zones / spatial audio coverage. Genuinely novel; not in standard UI libraries.
+
+  Reference implementation in Lord-Raven's `memoria` repo (`MapScreen.tsx`, d3-weighted-voronoi + SVG + Sutherland-Hodgman clipping). Full analysis in `src/lib/mining/VORONOI.md`.
 - **`GraphView<N, E>`** — nodes + edges, force-directed or fixed layout. For world.ts room graphs, faction-relation graphs, dialogue trees, family/lineage trees.
 
 **Entity displays:**
@@ -248,6 +254,8 @@ The library evolves into a chub-stage game engine. Explicit external dependencie
 **Wave 2F deliverables:**
 
 - `src/lib/3d/scene.tsx` — R3F integration wrapping chub-stage `render()` lifecycle.
+
+  Design owns/exposes/configures split + embedded-context footguns documented in `src/lib/mining/R3F.md`.
 - `src/lib/3d/physics.ts` — Rapier world wrapper composing with Shard persistence.
 - `src/lib/3d/assets.ts` — asset loader + Registry integration.
 - `src/lib/3d/camera-rigs/*.tsx` — common camera rigs: first-person, third-person orbital, top-down, fixed.
@@ -263,6 +271,8 @@ The library evolves into a chub-stage game engine. Explicit external dependencie
 ### Wave 2H — Character controllers + AI / pathfinding
 
 Each controller is a pattern, not a primitive; composes input + physics-kinematic-body + camera-rig + animation-state-machine.
+
+Kinematic controller defaults + footgun catalog mined from Rapier docs + community; see `src/lib/mining/RAPIER.md`.
 
 - `src/lib/patterns/controllers/fps.ts` — FPS WASD + mouselook.
 - `src/lib/patterns/controllers/third-person.ts` — Souls-like orbital.
@@ -367,6 +377,8 @@ These are the genuinely novel content. Each is a small composer (~30 LOC) plus a
 - `synergy/seed-from-player.ts` — LLM extracts a seed/spec from the player's free-form input; procgen elaborates from the seed. Used for player-as-author flows.
 - `synergy/hierarchical-summarization.ts` — for FC-scale stages: per-actor mini-reports first, then aggregate. Avoids 50k-token prompts. Composes with `Timeline.summarize`.
 - `synergy/sliding-window-chat.ts` — pairs the chatWindow primitive (when shipped) with Timeline so that as turns age out of the bounded verbatim window, their relevant content is captured as Timeline events (via tag-parser extraction or LLM summarization). Information persists; verbatim text doesn't. Defaults to a 5–10 turn window; crossing the window forces summarization. The "I want a 200-turn raw history" path requires explicit author opt-in plus a warning in the pattern doc about what it costs.
+
+14 additional synergy pattern candidates mined from SillyTavern / NovelAI / AI Dungeon — see `src/lib/mining/SYNERGY.md`.
 
 ### Wave 2I — context curation primitives
 
