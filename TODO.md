@@ -112,3 +112,16 @@ This work is queued behind: world/actor/intent/scene primitives, the synergy-pat
 Major scope expansion 2026-05-23: Waves 2E (UI), 2F (3D), 2G (realtime sensory), 2H (character controllers + AI / pathfinding) added to ROADMAP.md. Library is now a chub-stage game engine with modular packaging (dynamic imports per substrate module). Game catalog expanded to 16 shapes including FPS, ARPG, Souls, platformer, spacesim, RTS, walking-sim.
 
 See `src/lib/ROADMAP.md` Waves 2E–2H and Modular packaging strategy.
+
+## Follow-ups from Wave 2A/2E/2F/2I implementation
+
+- **`macro.ts` lift** — `scripted-quick-reply-macro.ts` (Wave 2I) currently embeds inline `MacroStep<S>` union (kinds: `quiet`, `show`, `set`). If future patterns add branching, loops, or nested macros, lift `MacroStep` into top-level `src/lib/macro.ts`. `action.ts` is combat-action-shaped (costs/range/targetFilter/effects) and doesn't cover macro sequencing.
+- **`ActorPool.toMap()` / iterator** — Wave 2A scenePattern composer had to manually extract `Map<ActorId, Actor>` from ActorPool. Adding `toMap()` or an iterator method to ActorPool would tidy this.
+- **`PriorityHandlerRegistry<E>` extraction candidate** — Wave 2A's `SceneConsequenceRegistry` is a thin sort-then-walk wrapper. If a second use surfaces (e.g., in `bulkTickPattern` or scene-end pipelines elsewhere), extract as a generic primitive.
+- **Optional-peer-dep lazy import pattern** — Wave 2I's `embeddings.ts` uses `const specifier = "@xenova/transformers"; import(specifier);` to keep tsc happy when the optional peer dep is absent. Document as the canonical pattern for future modules with optional peer deps. Possibly extract a tiny helper.
+- **Wave 2E remaining UI primitives** — TileGrid, HexGrid, GraphView, ActorPanel, BodyDiagram, TimelinePanel, RegistryGallery, StatBar, StatTier, ScoreBoard, SlotPicker, ChoiceList, ModalPicker, FormBuilder need design + implementation. None mined yet beyond voronoi; would need a small mining-or-design pass each (most are conventional React+SVG components).
+- **Wave 2F remaining 3D substrate** — `src/lib/3d/physics.ts` (Rapier integration), `src/lib/3d/assets.ts` (Three.js loaders + Registry integration), `src/lib/3d/camera-rigs/*.tsx` (FPS/third-person/top-down/etc. camera rigs distinct from controller patterns), `src/lib/3d/ui/{TileGrid3D,VoronoiInfluenceMap3D,GraphView3D}.tsx` (3D variants). None designed yet beyond ThreeScene.
+- **Wave 2D grafting unblock** — `graftingPattern` design exists (`GRAFTING.md`) but depends on `formPattern`, `puppetPattern`, `form-collection.ts` (sibling Wave 2D patterns). Those need design before grafting can be implemented cleanly.
+- **Wave 2H controllers unblock** — `CONTROLLERS.md` design exists but depends on `sensory/input.ts` (Wave 2G primitive) for input bindings. Wave 2G needs a design pass first (input abstraction over keyboard/mouse/gamepad/touch).
+- **AI/pathfinding (Wave 2H secondary)** — `src/lib/ai/{pathfinding,perception}.ts` + `src/lib/patterns/behavior-tree.ts` not yet designed.
+- **Wave 2G sensory** — `audio.ts`, `input.ts`, `particles.ts`, `post-fx.ts` not yet designed.

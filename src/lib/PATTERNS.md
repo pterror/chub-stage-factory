@@ -813,6 +813,74 @@ When to use: Subject-life-sim-shape (#19), Pregnancy-sim-shape (#17), dating-sim
 
 ---
 
+## 17. Scene composition (Wave 2A)
+
+Wire `scenePattern` from `patterns/scene.ts` for combinatoric body-tag-aware erotic-RPG scenes. Full design and slot/verb/act authoring guide: `src/lib/design/SCENE.md`.
+
+```ts
+import { scenePattern } from "./lib/patterns/scene";
+// See design/SCENE.md for SceneActionDef authoring and SceneConsequenceRegistry usage.
+```
+
+When to use: CoC-shape, TiTS-shape, LT-shape, any stage where scene outcomes depend on actor body tags × partner tags × pose × consent × intensity.
+
+---
+
+## 18. VoronoiInfluenceMap (Wave 2E)
+
+Drop-in React SVG component for influence-zone visualization. Full design and prop reference: `src/lib/UI-VORONOI.md`.
+
+```tsx
+import { VoronoiInfluenceMap } from "./lib/ui/voronoi-influence-map";
+// See UI-VORONOI.md for entity type, radius, color, and interaction-callback props.
+```
+
+When to use: faction territory display, NPC awareness radii, threat zones, spatial audio coverage, any "overlapping circles of influence" visualization.
+
+---
+
+## 19. ThreeScene basic usage (Wave 2F)
+
+Embed an R3F canvas inside `render()` via `ThreeScene`. Full design and owns/exposes/configures split: `src/lib/3D-SCENE.md`.
+
+```tsx
+import { ThreeScene } from "./lib/3d";
+// See 3D-SCENE.md for ref handle, camera-rig wiring, and Suspense asset loading.
+```
+
+When to use: any stage requiring 3D rendering (dungeon-crawler-shape, ARPG-shape, walking-sim-shape, spacesim-shape).
+
+---
+
+## 20. LlmPipeline wrapper (Wave 2I)
+
+Wrap every LLM call in a composable input→context→output→quiet envelope using `LlmPipelineRunner`. Full design and all 14 synergy pattern composers: `src/lib/LLM-PIPELINE.md`.
+
+```ts
+import { LlmPipelineRunner } from "./lib/llm-pipeline";
+// See LLM-PIPELINE.md for pipeline composition and which synergy patterns wire in here.
+```
+
+When to use: any stage wanting unified state threading across all LLM calls; prerequisite for most Wave 2I synergy composers.
+
+---
+
+## Anti-patterns
+
+### `budget-poisoning`
+
+Naive context construction adds entries one-by-one without any budget awareness. Each contributor appends unconditionally; when the total exceeds the model's context window, the assembler truncates the tail. Verbose contributors (Timeline windows, observation dumps) crowd out high-priority contributors (system instructions, turn input). Result: chaotic, uncontrolled section competition.
+
+**Mitigation:** use `ContextAssembler` with explicit `priority` and `optional` flags so required sections are protected, and apply `subcontextGroupBudgetingPattern` to assign per-group token caps before assembly.
+
+### `key-collision`
+
+Multiple context entries or cache keys share a prefix or overlapping regex, causing them to activate together when only one was intended. In `PlaceholderRegistry` this causes concurrent `waitFor` resolution races; in `TriggerSet` it causes multiple triggers firing on the same predicate match.
+
+**Mitigation:** use `inclusionGroupMutexPattern` to declare mutually exclusive activation groups, and prefer `kind: "glob"` or `kind: "regex"` predicate kinds (Wave 2I additions to `predicate.ts`) over loose string-prefix matching so match boundaries are explicit.
+
+---
+
 ## 7. Physics
 
 For "did the bullet hit the wall" / "can the player move here" / soft-body

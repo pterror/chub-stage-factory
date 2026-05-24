@@ -391,3 +391,91 @@ table and full example.
 - `type Dispatcher<S, E> = (state, entry) => S`
 - `class Replay<S, E> { constructor(initial, dispatch); record(entry); log(); replay(); replayUpTo(time); toJSON() }`
 - `reconstruct(initial, log, dispatch): S`
+
+## `scene.ts` (Wave 2A)
+
+- `interface SceneAct { id, verb, description?, requires?, tags? }`
+- `interface Pace { id, label, description? }`
+- `interface Agency { id, label, description? }`
+- `interface SceneSlot { id, actorRef: ActorRef, role?, tags? }`
+- `interface ScenePosition { id, label, description?, tags? }`
+- `interface SceneActionDef { id, label, slots, acts, paces?, positions?, agencies?, tags?, displayName?, description? }`
+- `interface SceneEvent { kind: string; [key: string]: unknown }`
+- `class SceneConsequenceRegistry { register(priority, handler); evaluate(event, state, refs): void }`
+- `evalPredicate<S>(p, state, refs, resolvers?): boolean` — re-export shim over `predicate.ts`
+- `getOngoingPerformers(scene): ActorRef[]`
+- `class Scene` — combinatoric action composer; body-tag-aware outcome resolution
+
+## `predicate.ts` — additive Wave 2I extensions
+
+- `kind: "regex"` — `{ kind: "regex"; target: ActorRef; field: string; pattern: string }` — regex match against a string field on the resolved actor/state
+- `kind: "glob"` — `{ kind: "glob"; target: ActorRef; field: string; pattern: string }` — glob match against a string field
+
+## `context.ts` — additive Wave 2I extensions
+
+- `Section.position?: 'top' | 'bottom' | { depth: number }` — injection position relative to other sections
+- `Section.role?: 'system' | 'user' | 'assistant'` — chat-role tagging for providers that support role-tagged messages
+
+## `llm-pipeline.ts` (Wave 2I)
+
+- `interface LlmPipeline<S> { state, inputModifier?, contextModifier?, outputModifier?, quietCall? }`
+- `class LlmPipelineRunner<S> { constructor(pipeline, generator); runTurn(playerInput): Promise<TurnResult> }`
+
+## `embeddings.ts` (Wave 2I)
+
+- `interface EmbeddingService { embed(text): Promise<number[]>; embedBatch(texts): Promise<number[][]>; similarity(a, b): number }`
+- `localTransformerEmbeddings(modelName?): EmbeddingService` — transformers.js adapter (lazy-imported)
+- `apiEmbeddings({ endpoint, key? }): EmbeddingService` — HTTP adapter
+
+## `patterns/scene.ts` (Wave 2A)
+
+- `scenePattern(opts)` — composer wiring `scene.ts` primitive + `body.ts` + `actor.ts` + `tag-parser.ts`; the erotic-RPG scene resolver
+
+## `ui/voronoi-influence-map.tsx` (Wave 2E)
+
+- `VoronoiInfluenceMap<E>` — React SVG component; circles-with-radii + intersection lines + clipped Voronoi cells; prop-customizable theme/colors/interaction-callbacks
+
+## `ui/voronoi-utils.ts` (Wave 2E)
+
+- `createCirclePolygon(cx, cy, r, sides?): [number, number][]`
+- `clipPolygonWithConvex(subject, clip): [number, number][]` — Sutherland-Hodgman
+- `isPointInsidePolygon(pt, poly): boolean`
+- `polygonBBox(poly): { x, y, w, h }`
+- `lerp(a, b, t): number`
+- `cubicEase(t): number`
+- Hash-seeded sine helpers for deterministic jitter
+
+## `3d/scene.tsx` (Wave 2F)
+
+- `ThreeSceneProps` — R3F canvas + lifecycle binding props
+- `ThreeSceneHandle` — imperative handle exposed via `useImperativeHandle`
+- `ThreeScene` — R3F wrapper component; mounts inside chub-stage `render()` lifecycle
+
+## `3d/loader.tsx` (Wave 2F)
+
+- `DefaultLoader` — Suspense fallback component for async asset loads
+
+## `3d/use-three-handle.ts` (Wave 2F)
+
+- `useThreeHandle(ref, handle)` — factory hook; wires `useImperativeHandle` for `ThreeSceneHandle`
+
+## `3d/index.ts` (Wave 2F)
+
+- Re-exports: `ThreeScene`, `ThreeSceneProps`, `ThreeSceneHandle`, `DefaultLoader`, `useThreeHandle`
+
+## `patterns/synergy/*.ts` (Wave 2I — 14 composers)
+
+- `recursive-key-expansion.ts` — `recursiveKeyExpansionPattern` — expands short cache-key prefixes into full structural keys; prevents key-collision across pattern families
+- `positional-injection-depth.ts` — `positionalInjectionDepthPattern` — assigns `Section.position` depth values to contributors based on priority ordering
+- `inclusion-group-mutex.ts` — `inclusionGroupMutexPattern` — groups context entries into mutually-exclusive inclusion groups so only one entry per group activates per turn
+- `sticky-cooldown-delay-timers.ts` — `stickyCooldownDelayTimersPattern` — per-key activation cooldowns + minimum-display-duration timers for persistent UI entries
+- `recency-frequency-eviction.ts` — `recencyFrequencyEvictionPattern` — LRU-style eviction over a context entry pool weighted by recency + frequency scores
+- `force-activate-with-budget-cap.ts` — `forceActivateWithBudgetCapPattern` — forces a set of high-priority entries into context up to a hard token budget cap
+- `subcontext-group-budgeting.ts` — `subcontextGroupBudgetingPattern` — assigns per-group token budgets so one verbose group can't starve the others
+- `triplehook-pipeline.ts` — `triplehookPipelinePattern` — wires `LlmPipeline` input/context/output hooks as a unified stage envelope
+- `quiet-generation-sub-call.ts` — `quietGenerationSubCallPattern` — fires a secondary `quietCall` inside `LlmPipeline` for mechanical state extraction without surfacing prose to the player
+- `scripted-quick-reply-macro.ts` — `scriptedQuickReplyMacroPattern` — `MacroStep<S>` union (`quiet | show | set`) sequenced into a scripted reply; bypasses full generation for canned flows
+- `semantic-recall-overlay.ts` — `semanticRecallOverlayPattern` — vector-similarity retrieval over `EmbeddingService`; injects relevant past entries into context as an overlay section
+- `scheduled-self-check.ts` — `scheduledSelfCheckPattern` — periodic `quietCall` that evaluates world-state invariants and emits correction deltas into the next turn's context
+- `character-filtered-activation.ts` — `characterFilteredActivationPattern` — gates context-entry activation on which character is speaking; prevents cross-character bleed
+- `override-slots.ts` — `overrideSlotsPattern` — named override slots in `ContextAssembler` that stage authors can fill at runtime to preempt default contributor output

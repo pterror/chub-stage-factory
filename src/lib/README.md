@@ -91,6 +91,26 @@ engine; the stage is the world model.
 Anti-example: the stage assembling `"You are starving and your left hand is cold and..."` and
 appending it to `stageDirections`. The LLM is now competing with prose, not generating it.
 
+## Wave 2A/2E/2F/2I primitives (shipped 2026-05-24)
+
+| File | Wave | Description |
+|------|------|-------------|
+| `scene.ts` | 2A | Scene composition — combinatoric body-tag-aware outcome resolver (`Scene`, `SceneAct`, `Pace`, `Agency`, `SceneSlot`, `ScenePosition`, `SceneActionDef`, `SceneConsequenceRegistry`) |
+| `patterns/scene.ts` | 2A | `scenePattern` composer — wires scene primitive + body + actor + tag-parser |
+| `ui/voronoi-influence-map.tsx` | 2E | `VoronoiInfluenceMap<E>` — Voronoi influence-zone React SVG component |
+| `ui/voronoi-utils.ts` | 2E | Geometry helpers: `createCirclePolygon`, `clipPolygonWithConvex`, `isPointInsidePolygon`, hash-seeded sine helpers, `polygonBBox`, `lerp`, `cubicEase` |
+| `3d/scene.tsx` | 2F | `ThreeScene` — R3F wrapper component; binds to chub-stage `render()` lifecycle |
+| `3d/loader.tsx` | 2F | `DefaultLoader` — Suspense fallback for async asset loads |
+| `3d/use-three-handle.ts` | 2F | `useThreeHandle` — imperative handle factory for `ThreeSceneHandle` |
+| `3d/index.ts` | 2F | Re-exports for all 3D primitives |
+| `llm-pipeline.ts` | 2I | `LlmPipeline<S>`, `LlmPipelineRunner<S>` — composable LLM-call envelope (input→context→output→quiet) |
+| `embeddings.ts` | 2I | `EmbeddingService`, `localTransformerEmbeddings`, `apiEmbeddings` — vector embedding interface |
+| `patterns/synergy/*.ts` | 2I | 14 synergy pattern composers (see REFERENCE.md and LLM-PIPELINE.md for full list) |
+
+Additive extensions also shipped in Wave 2I: `predicate.ts` gains `kind: "regex"` and `kind: "glob"`; `context.ts` `Section` gains `position` and `role` fields.
+
+Wave 2E partial (other UI primitives — TileGrid, HexGrid, GraphView, ActorPanel, etc. — still pending). Wave 2F partial (physics, assets, camera-rigs, 3D UI variants still pending).
+
 ## Wave 1 primitives (universal shared foundation)
 
 Required by every Wave 3 example. All three are dependency-free of each other.
