@@ -8,6 +8,7 @@ The library's design direction. Reflects design decisions through 2026-05-23. Co
 - `COMPOSITION.md` — patterns-as-first-class positioning rationale + "imagine X, but infinite" pitch.
 - `PATTERNS.md` — current recipe catalog.
 - `CLAUDE.md` (repo root) — north stars frontloaded into every Claude Code session.
+- `design/` — implementation-ready design docs synthesized from `mining/` + ROADMAP wave specs. See `src/lib/design/README.md` for the index. Foremen implementing a wave should read the corresponding design doc first.
 
 Read those first; this doc adds: the game shipping catalog, the dependency-driven wave plan, the decision audit, the pattern composer catalog, the synergy-pattern catalog, and the mining queue.
 
@@ -154,6 +155,12 @@ Design notes:
 - **Cooldown / oneShot state.** Lives in TriggerSet's serializable state. Shard-able like everything else.
 - **Probability functions.** State-dependent `(state) => number` loses serialization. Alternative: `{ base: number; modifiers: PredicateBasedModifier[] }` — fully serializable. Ship both; escape hatch with serialization warning.
 
+**Additive extensions (from SYNERGY design pass):** `predicate.ts` gains two new kinds in Wave 2I:
+- `{ kind: "regex"; target; field; pattern: string }` — regex match against a string field
+- `{ kind: "glob"; target; field; pattern: string }` — glob match against a string field
+
+Mitigates the `key-collision` anti-pattern documented in `src/lib/design/SYNERGY-EXTENSIONS.md`.
+
 #### `procgen.recombine` (Wave 1 amendment)
 
 The genetics helper uses `ConditionalTrigger` for mutations, not a flat `mutationRate` parameter. Mutations are themselves predicate-gated probabilistic triggers — same primitive shape as every other "X chance under Y conditions" mechanic. The flat-rate framing was lazy; the trigger-set framing generalizes.
@@ -169,7 +176,7 @@ procgen.recombine({
 
 ### Wave 2A — erotic-RPG axis
 
-- **`src/lib/scene.ts` — combinatoric action composition.** `(actor, target, verb) → outcome` where outcome depends on actor's parts × target's parts × consent × pose × intensity × items-in-scope. Extension of `action.ts` with a richer target/effect resolver that knows body tags and partner state. ~200 LOC.
+- **`src/lib/scene.ts` — combinatoric action composition.** `(actor, target, verb) → outcome` where outcome depends on actor's parts × target's parts × consent × pose × intensity × items-in-scope. Extension of `action.ts` with a richer target/effect resolver that knows body tags and partner state. ~420-480 LOC (estimate corrected post-design; see `src/lib/design/SCENE.md`).
 - **`src/lib/patterns/scene.ts` — `scenePattern` composer.**
 
 Enables CoC-shape, TiTS-shape, LT-shape. **Mining required first** (see Mining queue): TiTS source + LT source + possibly FoE for scene-resolver prior art. Scene composition is the most under-theorized axis; only deep prior art exists in (notoriously messy) game sources.
@@ -426,6 +433,49 @@ Stages compose contributors via `register`. The assembler handles priority alloc
 
 Genuinely best-in-class versus existing prompt-engineering frameworks (LangChain templates, LlamaIndex) which are template-based (string-with-placeholders, fill them). Contributor model is more flexible because each contributor knows what it's contributing AND can adjust based on remaining budget.
 
+**Additive extensions (from SYNERGY design pass):** `Section` gains two optional fields:
+- `position?: 'top' | 'bottom' | { depth: number }` — where the section is injected relative to other sections
+- `role?: 'system' | 'user' | 'assistant'` — chat-role tagging when the LLM provider supports role-tagged messages
+
+Required by `positionalInjectionDepthPattern` documented in `src/lib/design/SYNERGY-EXTENSIONS.md`.
+
+### `src/lib/llm-pipeline.ts` — composable LLM-call envelope (load-bearing for synergy patterns)
+
+Surfaced from the SYNERGY mining run as the AID Scripting `triple-hook-pipeline + quiet-generation-sub-call + state-object` trio. Architecturally distinct from `ContextAssembler` + hooks — it doesn't reduce to existing primitives; it OWNS the wrapper shape (input → context → output → quiet) that threads persistent stage state through every LLM call.
+
+```ts
+interface LlmPipeline<S> {
+  state: S;
+  inputModifier?: (input: string, state: S) => { rewritten: string; stateDelta?: Partial<S> };
+  contextModifier?: (context: ContextAssembler, state: S) => void;
+  outputModifier?: (output: string, state: S) => { rewritten: string; stateDelta?: Partial<S> };
+  quietCall?: (prompt: string, state: S) => Promise<{ result: string; stateDelta?: Partial<S> }>;
+}
+class LlmPipelineRunner<S> {
+  constructor(pipeline: LlmPipeline<S>, generator: GenerationService);
+  runTurn(playerInput: string): Promise<TurnResult>;
+}
+```
+
+The 14 new synergy patterns compose IN this primitive; the existing 8 synergy patterns can optionally be re-expressed within it for stages wanting a unified envelope. Detailed spec in `src/lib/design/SYNERGY-EXTENSIONS.md`. ~250 LOC.
+
+### `src/lib/embeddings.ts` — vector embedding service interface
+
+Surfaced from the SYNERGY mining run as required by `semanticRecallOverlayPattern`. Genuinely new primitive; doesn't reduce to existing primitives.
+
+```ts
+interface EmbeddingService {
+  embed(text: string): Promise<number[]>;             // returns vector
+  embedBatch(texts: string[]): Promise<number[][]>;
+  similarity(a: number[], b: number[]): number;       // cosine, typically
+}
+
+function localTransformerEmbeddings(modelName?: string): EmbeddingService;  // transformers.js
+function apiEmbeddings(opts: { endpoint: string; key?: string }): EmbeddingService;
+```
+
+Ships both local-transformer and API-call adapters; stage author picks. Used by `semanticRecallOverlayPattern` and any future RAG-shaped stage. ~120 LOC + transformers.js (lazy-imported, ~5MB on demand).
+
 ## Decision audit — things ruled out
 
 This list is closed; each item is permanently not-shipping unless the architectural facts change. "Deferred until a use case" is not present in this list because it is not a valid library-internal reason.
@@ -460,3 +510,4 @@ Read-only investigation tasks that should precede their dependent design work.
 - Branch `main` is ~25 commits ahead of origin; not pushed.
 - **Scope expansion 2026-05-23**: Waves 2E (UI), 2F (3D), 2G (sensory), 2H (controllers + AI) added. Game shipping catalog expanded from 9 to 16 shapes. Library is now a chub-stage game engine; modular packaging via dynamic imports keeps core lean.
 - **Catalog expansion 2026-05-24**: Game shipping catalog expanded from 16 to 20 shapes. Added catalog taxonomy (atomic / umbrella / composite). Added Wave 1.5 (predicate/trigger + procgen.recombine). Added 6 new pattern composers (subjectSandboxPattern, dailyVignettePattern, slotAssignmentPattern, spatialPropagationPattern, focusPattern, lineagePattern). Added slice-of-life-texture meta-category note.
+- **Design pass complete 2026-05-24** — 6 mining reports synthesized into 6 implementation-ready design docs in `src/lib/design/`. Surfaces: `LlmPipeline` and `embeddings.ts` added as Wave 2I primitives; `predicate.ts` gains regex/glob kinds; `context.ts` `Section` gains position/role annotations; scene.ts LOC estimate corrected to 420-480.
