@@ -429,6 +429,390 @@ const lineage = buildGraph({ nodeCount: 20, connectivity: "tree" });
 
 ---
 
+## 11. Predicate-gated trigger
+
+Declare a `TriggerSet` with several `ConditionalTrigger`s using the predicate DSL. One combat trigger, one social trigger, one environmental trigger — all evaluated in the same pass.
+
+```ts
+import { TriggerSet, type ConditionalTrigger } from "./lib/trigger";
+import { type Predicate } from "./lib/predicate";
+
+// Shared state shape passed to evaluate()
+interface GameState {
+  player: { location: string; hp: number; tags: string[] };
+  world: { flags: Record<string, unknown>; lastEventAt: Record<string, number> };
+  npcs: Record<string, { tags: string[]; obedience: number; hp: number }>;
+}
+
+// Combat: grue attacks player in darkness with no protection
+const grueAttack: ConditionalTrigger<GameState, { kind: "grue-attack" }> = {
+  id: "grue-attack",
+  when: {
+    kind: "and", clauses: [
+      { kind: "world-flag", flag: "in-darkness", value: true },
+      { kind: "tag-on", target: "player", tag: "grue-protected" },  // will be negated below
+    ],
+  } as Predicate<GameState>,
+  // simpler: negate the protection check
+  // In practice: { kind: "and", clauses: [darkFlag, { kind: "not", inner: grueProtTag }] }
+  probability: 0.8,
+  effect: { kind: "grue-attack" },
+};
+
+// Social: faction approaches when reputation is high and cooldown has passed
+const factionApproach: ConditionalTrigger<GameState, { kind: "faction-approach"; faction: string }> = {
+  id: "faction-approach",
+  when: {
+    kind: "and", clauses: [
+      { kind: "stat", target: { id: "arcology" }, stat: "reputation", op: ">", value: 70 },
+      { kind: "since", event: "last-faction-encounter", op: ">", duration: 7 * 24 * 60 * 60 * 1000 },
+    ],
+  },
+  probability: 0.3,
+  effect: { kind: "faction-approach", faction: "trade-guild" },
+  cooldown: 48 * 60 * 60 * 1000,  // 48h between firings
+};
+
+// Environmental: fire risk when room overheats
+const fireRisk: ConditionalTrigger<GameState, { kind: "fire-start"; location: string }> = {
+  id: "fire-risk",
+  when: {
+    kind: "and", clauses: [
+      { kind: "world-flag", flag: "room.heat-output-exceeds-capacity", value: true },
+      { kind: "not", inner: { kind: "world-flag", flag: "fire-suppression-active", value: true } },
+    ],
+  },
+  probability: 0.05,   // 5% per tick
+  effect: { kind: "fire-start", location: "current-room" },
+};
+
+const triggers = new TriggerSet<GameState, { kind: string }>([grueAttack, factionApproach, fireRisk]);
+
+// Each tick / beforePrompt:
+function evaluateTriggers(state: GameState, rng: RngStream) {
+  const fired = triggers.evaluate(state, rng);
+  // fired: array of effect payloads for all triggers that resolved true + passed probability roll
+  for (const effect of fired) {
+    // dispatch effect to your handler
+  }
+}
+```
+
+When to use: any "X chance under Y conditions" mechanic — combat events, faction dynamics, environmental hazards, relationship triggers, pregnancy complications, facility incidents.
+
+---
+
+## 12. Spatial propagation
+
+Events propagate room-to-room through the world graph using `spatialPropagationPattern`. Fire starts in one room, spreads to adjacencies each tick.
+
+```ts
+import { type World } from "./lib/world";
+import { TriggerSet, type ConditionalTrigger } from "./lib/trigger";
+import { Scheduler } from "./lib/scheduler";
+
+interface PropagationState {
+  sourceRoom: string;
+  adjacentRooms: string[];
+  roomFlags: Record<string, Record<string, unknown>>;
+}
+
+// Spread trigger: fire jumps to an adjacent room if not suppressed
+const fireSpread: ConditionalTrigger<PropagationState, { kind: "fire-spread"; to: string }> = {
+  id: "fire-spread",
+  when: {
+    kind: "and", clauses: [
+      { kind: "world-flag", flag: "source-on-fire", value: true },
+      { kind: "not", inner: { kind: "world-flag", flag: "adjacent-suppressed", value: true } },
+    ],
+  },
+  probability: 0.4,   // 40% chance per adjacent room per tick
+  effect: { kind: "fire-spread", to: "" },  // 'to' filled at dispatch time
+};
+
+function propagateFire(world: World, burningRooms: Set<string>, scheduler: Scheduler, now: number) {
+  const newlyBurning: string[] = [];
+  for (const roomId of burningRooms) {
+    const adjacents = world.exits(roomId).map(e => e.destination);
+    for (const adj of adjacents) {
+      if (burningRooms.has(adj)) continue;
+      const state: PropagationState = {
+        sourceRoom: roomId,
+        adjacentRooms: adjacents,
+        roomFlags: { "source-on-fire": { value: true }, "adjacent-suppressed": { value: world.flag(adj, "fire-suppression") } },
+      };
+      const spread = new TriggerSet([{ ...fireSpread, effect: { kind: "fire-spread", to: adj } }]);
+      const fired = spread.evaluate(state as any, scheduler.rng);
+      if (fired.length > 0) newlyBurning.push(adj);
+    }
+  }
+  for (const r of newlyBurning) burningRooms.add(r);
+  return newlyBurning;
+}
+```
+
+When to use: fire spread, plague propagation (FS-shape), gossip diffusion (LT-shape), faction territory shift, contamination (Lobotomy variant), wildfire in wilderness sandboxes.
+
+---
+
+## 13. Slot assignment
+
+Worker-to-room slot assignment with constraint predicates. Assignment is only valid when the worker satisfies the slot's predicate.
+
+```ts
+import { ActorPool, type Actor } from "./lib/actor";
+import { evaluate, type Predicate } from "./lib/predicate";
+
+interface SlotDef {
+  id: string;
+  roomId: string;
+  capacity: number;
+  requires: Predicate<Actor>;  // constraint on the assigned worker
+}
+
+interface Assignment {
+  slotId: string;
+  actorId: string;
+}
+
+const SLOTS: SlotDef[] = [
+  {
+    id: "reactor-tech",
+    roomId: "reactor",
+    capacity: 2,
+    requires: { kind: "stat", target: "self", stat: "engineering", op: ">=", value: 3 },
+  },
+  {
+    id: "medical-bay",
+    roomId: "medbay",
+    capacity: 3,
+    requires: { kind: "tag-on", target: "self", tag: "medic-trained" },
+  },
+];
+
+const assignments: Assignment[] = [];
+
+function assignWorker(pool: ActorPool, actorId: string, slotId: string): "ok" | "invalid" | "full" {
+  const slot = SLOTS.find(s => s.id === slotId)!;
+  const actor = pool.get(actorId)!;
+  if (!evaluate(slot.requires, actor, { self: actor })) return "invalid";
+  const current = assignments.filter(a => a.slotId === slotId).length;
+  if (current >= slot.capacity) return "full";
+  assignments.push({ slotId, actorId });
+  return "ok";
+}
+
+function validateAssignments(pool: ActorPool): Assignment[] {
+  // Re-evaluate all — worker stats may have changed
+  return assignments.filter(a => {
+    const slot = SLOTS.find(s => s.id === a.slotId)!;
+    const actor = pool.get(a.actorId)!;
+    return evaluate(slot.requires, actor, { self: actor });
+  });
+}
+```
+
+When to use: Facility-management-shape (#20) room staffing, FC-shape (#8) slave job assignments, Warframe-shape (#9) loadout slots, any "actor must satisfy constraint to occupy role" mechanic.
+
+---
+
+## 14. Daily vignette
+
+One well-grounded vignette per game-day tick using `dailyVignettePattern`. Continuity flows through Timeline events from past vignettes.
+
+```ts
+import { Timeline } from "./lib/timeline";
+import { Scheduler } from "./lib/scheduler";
+
+interface DayContext {
+  subjectId: string;
+  dayNumber: number;
+  recentEvents: string[];    // pulled from timeline
+  subjectState: {
+    location: string;
+    mood: string;
+    activeConditions: string[];
+  };
+}
+
+interface VignetteEvent {
+  day: number;
+  summary: string;
+  mechanicalEffects: string[];
+}
+
+timeline = new Timeline<VignetteEvent>();
+scheduler = new Scheduler();
+
+async function generateDailyVignette(
+  ctx: DayContext,
+  generate: (prompt: string) => Promise<{ prose: string; effects: string[] }>,
+  now: number,
+): Promise<VignetteEvent> {
+  const recentSummary = ctx.recentEvents.slice(-5).join("\n");
+
+  const result = await generate(
+    `Day ${ctx.dayNumber}. Subject is at ${ctx.subjectState.location}, mood: ${ctx.subjectState.mood}.\n` +
+    `Active conditions: ${ctx.subjectState.activeConditions.join(", ")}.\n` +
+    `Recent history:\n${recentSummary}\n\n` +
+    `Write one vignette scene for today. Extract any mechanical effects (stat changes, condition gains/losses) as a list.`
+  );
+
+  const evt: VignetteEvent = {
+    day: ctx.dayNumber,
+    summary: result.prose,
+    mechanicalEffects: result.effects,
+  };
+  this.timeline.append(evt, now);
+  return evt;
+}
+```
+
+When to use: Pregnancy-sim-shape (#17), Subject-life-sim-shape (#19), dating-sim, slow-life farming sim, any shape where the content unit is "one meaningful day in a subject's life."
+
+---
+
+## 15. Lineage tracking
+
+Parent-child graph queries and inbreeding coefficient calculation using `lineagePattern` over `procgen.buildGraph`.
+
+```ts
+import { buildGraph } from "./lib/procgen";
+import { ActorPool, type Actor } from "./lib/actor";
+
+interface LineageNode {
+  actorId: string;
+  parentIds: string[];
+  generation: number;
+}
+
+const lineageNodes = new Map<string, LineageNode>();
+
+function registerOffspring(actorId: string, parentIds: string[]): void {
+  const maxParentGen = Math.max(
+    0,
+    ...parentIds.map(p => lineageNodes.get(p)?.generation ?? 0)
+  );
+  lineageNodes.set(actorId, { actorId, parentIds, generation: maxParentGen + 1 });
+}
+
+function getAncestors(actorId: string, depth = Infinity): Set<string> {
+  const visited = new Set<string>();
+  function walk(id: string, remaining: number) {
+    if (remaining <= 0) return;
+    for (const parentId of lineageNodes.get(id)?.parentIds ?? []) {
+      visited.add(parentId);
+      walk(parentId, remaining - 1);
+    }
+  }
+  walk(actorId, depth);
+  return visited;
+}
+
+function commonAncestors(a: string, b: string): Set<string> {
+  const aAnc = getAncestors(a);
+  const bAnc = getAncestors(b);
+  return new Set([...aAnc].filter(x => bAnc.has(x)));
+}
+
+function inbreedingCoefficient(a: string, b: string): number {
+  const shared = commonAncestors(a, b);
+  if (shared.size === 0) return 0;
+  // Wright's path coefficient approximation: sum 0.5^(path length) over shared ancestors
+  let f = 0;
+  for (const anc of shared) {
+    const dA = pathLength(a, anc);
+    const dB = pathLength(b, anc);
+    if (dA !== null && dB !== null) f += Math.pow(0.5, dA + dB + 1);
+  }
+  return Math.min(1, f);
+}
+
+function pathLength(from: string, to: string): number | null {
+  // BFS through parentIds
+  const queue: [string, number][] = [[from, 0]];
+  while (queue.length > 0) {
+    const [cur, dist] = queue.shift()!;
+    if (cur === to) return dist;
+    for (const p of lineageNodes.get(cur)?.parentIds ?? []) queue.push([p, dist + 1]);
+  }
+  return null;
+}
+```
+
+When to use: Breeding-sim-shape (#18) offspring generation, FC-shape (#8) dynasty tracking, LT-shape (#6) noble lineages.
+
+---
+
+## 16. Subject sandbox loop
+
+Player-as-subject life-sim loop using `subjectSandboxPattern`. Player IS the focal actor in a world of NPC relationships; open multi-location navigation with daily-vignette content.
+
+```ts
+import { ActorPool, type Actor } from "./lib/actor";
+import { type World } from "./lib/world";
+import { TriggerSet } from "./lib/trigger";
+import { Timeline } from "./lib/timeline";
+import { Scheduler } from "./lib/scheduler";
+
+interface SubjectState {
+  player: Actor;
+  currentLocation: string;
+  day: number;
+  npcRelations: Map<string, { affinity: number; lastInteraction: number }>;
+}
+
+// Relationship trigger: NPC approaches player when affinity is high
+const npcApproach = new TriggerSet([{
+  id: "npc-approach",
+  when: {
+    kind: "and", clauses: [
+      { kind: "actor-relation", subject: { id: "npc" }, object: "player", relation: "affinity", op: ">", value: 60 },
+      { kind: "since", event: "last-npc-interaction", op: ">", duration: 24 * 60 * 60 * 1000 },
+    ],
+  },
+  probability: 0.4,
+  effect: { kind: "npc-initiates-scene" },
+  cooldown: 12 * 60 * 60 * 1000,
+}]);
+
+async function subjectLoop(
+  state: SubjectState,
+  world: World,
+  pool: ActorPool,
+  timeline: Timeline<unknown>,
+  scheduler: Scheduler,
+  generate: (ctx: unknown) => Promise<string>,
+  now: number,
+) {
+  // 1. Evaluate conditional triggers for today's events
+  const triggered = npcApproach.evaluate(state as any, scheduler.rng);
+
+  // 2. Generate the day's vignette, grounded in state + triggers
+  const vignette = await generate({
+    player: state.player,
+    location: world.describe(state.currentLocation),
+    day: state.day,
+    triggeredEvents: triggered,
+    recentHistory: timeline.window(5),
+  });
+
+  // 3. Apply mechanical effects; record to timeline
+  timeline.append({ day: state.day, prose: vignette, triggered }, now);
+
+  // 4. Advance scheduler; tick NPCs
+  scheduler.advance(24 * 60 * 60 * 1000, now);
+  pool.forEach(npc => npc.tick(now));
+
+  state.day += 1;
+  return vignette;
+}
+```
+
+When to use: Subject-life-sim-shape (#19), Pregnancy-sim-shape (#17), dating-sim, any shape where the player is the subject of a life rather than a manager of systems.
+
+---
+
 ## 7. Physics
 
 For "did the bullet hit the wall" / "can the player move here" / soft-body

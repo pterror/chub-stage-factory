@@ -27,9 +27,19 @@ Two design rules surfaced during the Warframe-shape discussion:
 7. **Configuration is additive, never subtractive.** Saving a build never costs you another build. Switching configurations is mechanically free by default. If a stage wants to impose currency / cooldown / narrative friction on customization, it does so explicitly; the library never imposes it.
 6. **Named-in-source-game ≠ earns-a-primitive.** Things have names in the games we're modeling (`Faction`, `Module`, `Skit`, `Form`, `ConfigSlots`); that does not mean each gets a primitive slot. The reduction test always applies.
 
-## Shipping catalog — 16 game-shape examples
+## Catalog taxonomy — atomic / umbrella / composite shapes
 
-Each is a Chub-deployable stage whose worlds, characters, and content are generated on demand by LLM + procgen rather than authored once. The tagline is the audience-facing pitch and ships in the stage's `chub_meta.yaml` + `README.md`. The point isn't to ship all 16 immediately — it's that the library *enables* them.
+The catalog isn't a flat list of N games to build; it's a 2D-or-more space where every cell is a valid stage and a few cells are highlighted as canonical examples. Shapes fall into three categories:
+
+- **Atomic shapes.** Single mechanical axis. Each is a clean genre with well-understood mechanics. Examples: CCA-shape (#1, IF), Zork-shape (#2, IF + score), Walking-sim-shape (#16, atmospheric).
+- **Umbrella shapes.** Same mechanics, different content theming. Examples: Facility-management-shape (#20) with SFW/brothel/Lobotomy variants — identical mechanical DNA (room grid + workers + assignments + incidents + bulkTick), different content tagging. Subject-life-sim-shape (#19) with fempov / malepov / nonbinary POV variants.
+- **Composite shapes.** Multiple atomic shapes layered. Examples: FC-shape (#8) is Facility-Management × Breeding-Sim × adult content layered together. CoC-shape (#4) is Sandbox × Body-Transformation × Scene-Combinatorics. Composite shapes inherit primitive dependencies from each axis they layer.
+
+This taxonomy is the right way to read the catalog: each example we ship demonstrates one canonical point in the space; the patterns layer makes the rest of the space cheap to reach. The catalog grows by either (a) identifying genuinely new mechanical axes (atomic shapes), (b) recognizing one shape's mechanics work across multiple themes (umbrella shapes), or (c) layering existing shapes (composite shapes).
+
+## Shipping catalog — 20 game-shape examples
+
+Each is a Chub-deployable stage whose worlds, characters, and content are generated on demand by LLM + procgen rather than authored once. The tagline is the audience-facing pitch and ships in the stage's `chub_meta.yaml` + `README.md`. The point isn't to ship all 20 immediately — it's that the library *enables* them.
 
 | # | Game-shape | Tagline | Primitive deps | Status |
 |---|---|---|---|---|
@@ -49,6 +59,12 @@ Each is a Chub-deployable stage whose worlds, characters, and content are genera
 | 14 | Spacesim-shape | *Imagine Elite Dangerous, but infinite.* — procgen galaxy, ship combat. Note: TiTS-shape but with the actual flying. | 3D substrate, vehicle controller, space physics | Wave 3 pending |
 | 15 | RTS-shape | *Imagine StarCraft, but infinite.* — procgen maps, unit production, base building. | 3D substrate top-down, cursor controller, pathfinding | Wave 3 pending |
 | 16 | Walking-sim-shape | *Imagine Dear Esther, but infinite.* — procgen vistas, LLM-generated atmospheric voiceover. | 3D substrate, FPS controller, audio | Wave 3 pending |
+| 17 | Pregnancy-sim-shape | *Imagine [your favorite pregnancy CYOA], but infinite.* — every chat is a different pregnancy with different complications, body trajectories, partner dynamics; every daily vignette procgen-grounded and LLM-rendered. | actor, transformation trajectory (have), effects with asymmetric kinetics (have), scheduler, scene primitive (Wave 2A), generate (Wave 1), Timeline, observation, dailyVignettePattern | Wave 3 pending |
+| 18 | Breeding-sim-shape | *Imagine Breeding Season, but infinite.* — every chat is a different bestiary of breeding partners with unique trait pools; generations branch dynastically; every offspring procgen-generated with LLM-flavored personality. | actor + ActorPool, procgen.recombine (Wave 1.5), generate (Wave 1), bulkTick (Wave 2C), managerial (Wave 2C), Timeline, Registry | Wave 3 pending |
+| 19 | Subject-life-sim-shape (umbrella; fempov-horny-sandbox is one POV variant) | Multiple taglines per POV: *Imagine "My New Life," but infinite. Imagine Lab Rats 2 from her perspective, but infinite. Imagine The Sims with explicit content, but infinite.* — player IS the subject (not manager), open multi-location life sim with recurring NPC relationships, resource management, pregnancy as one consequence thread among many. | actor (focal), ActorPool (NPCs), world (Wave 2B), inventory, stats, effects, scheduler, scene (Wave 2A), transformation, Timeline, **ConditionalTrigger** (huge here — pregnancy conditional on cycle+protection+stats; NPC behavior based on past interactions), generate, intent (Wave 2B), subjectSandboxPattern | Wave 3 pending |
+| 20 | Facility-management-shape (umbrella; three theme variants below) | 20a *Imagine Fallout Shelter, but infinite.* — every vault is a different procgen layout, different dwellers, different incidents. 20b *Imagine Strive: Conquest, but infinite.* — every brothel is different girls, different clientele, different room loadout. 20c *Imagine Lobotomy Corporation, but infinite.* — every facility is different abnormalities, different employees, different mental-health spirals. | TileGrid UI (Wave 2E), world (Wave 2B) for rooms-as-graph, Registry<RoomType>, ActorPool (workers), stats + tiers, Scheduler, bulkTick (Wave 2C), managerial (Wave 2C), ConditionalTrigger for incidents (Wave 1.5), Effects (worker status), slotAssignmentPattern, spatialPropagationPattern, focusPattern, generate + PlaceholderRegistry (worker recruitment) | Wave 3 pending |
+
+**Meta-category — slice-of-life-texture-shapes.** The catalog's first 16 shapes biased toward combat / management / exploration / sandbox. Pregnancy-sim (#17), and other shapes that would fit here (dating-sim, pet-care, slow-life farming a la Stardew, aging-and-life sim a la Sims), share a distinct mechanical axis: **sustained focus on one subject's gradual change with daily vignettes as the content unit**. The load-bearing composer for all of them is `dailyVignettePattern` — slice-of-life equivalent of `bulkTick` (which advances many actors in parallel; daily-vignette advances ONE subject deeply through time). This category isn't a separate catalog entry per se; it's a recurring shape across multiple entries (17, plus future dating-sim, life-sim, etc. if/when added).
 
 The library's external promise is unbounded faithful-to-genre play; these examples are the proof. The "infinite X" framing in each stage's tagline is non-negotiable — authors browsing Chub see "infinite TiTS" and click; they see "primitives library demo stage" and don't.
 
@@ -74,6 +90,82 @@ Required by every Wave 3 example. Three primitives, parallelizable (no inter-dep
 - **`src/lib/generate.ts` (or extension of `classifier.ts`) — LLM-call primitive with schema + retry + cache.** `(prompt, schema?) => Promise<T>` with retry on validation. Cache via Shard. Composes with `PlaceholderRegistry` for placeholder→swap async. Single primitive surface for LLM gen across all stages.
 
 Wave 1 adds one ROADMAP-tier decision rule: **the synthesis primitives (`procgen` + `generate` together with `persistence` + `PlaceholderRegistry`) are load-bearing for the "infinite" pitch.** Test for any future primitive: does this make "infinite X" more credible, or just more elaborate?
+
+### Wave 1.5 — predicate/trigger + procgen.recombine
+
+Small wave (~200 LOC total) that ships ahead of Wave 2 because it is load-bearing across everything that comes after. Two primitives; no inter-dependencies.
+
+#### `src/lib/predicate.ts` + `src/lib/trigger.ts` — conditional probabilistic triggers
+
+Surfaced from the breeding-sim discussion: a "mutation rate" parameter is the lazy roguelike framing. The real primitive shape is **conditional probabilistic triggers with a queryable predicate DSL** — generalizable to every "this happens when X under Y conditions with Z chance" mechanic across the catalog.
+
+```ts
+// src/lib/predicate.ts
+type Predicate<S> =
+  | { kind: "tag-on"; target: ActorRef; tag: string }
+  | { kind: "stat"; target: ActorRef; stat: string; op: ">" | "<" | "==" | "!=" | ">=" | "<="; value: number }
+  | { kind: "stat-tier"; target: ActorRef; stat: string; tier: string }
+  | { kind: "has-item"; target: ActorRef; item: string; count?: number }
+  | { kind: "located-at"; target: ActorRef; location: string }
+  | { kind: "actor-relation"; subject: ActorRef; object: ActorRef; relation: string; op?: ">" | "<" | "==" ; value?: number }
+  | { kind: "since"; event: string; op: "<" | ">"; duration: number }      // time-since-event
+  | { kind: "world-flag"; flag: string; value?: unknown }
+  | { kind: "and"; clauses: Predicate<S>[] }                                // n-ary
+  | { kind: "or"; clauses: Predicate<S>[] }
+  | { kind: "not"; inner: Predicate<S> }
+  | { kind: "custom"; id: string; fn: (s: S, refs: Refs) => boolean };      // escape hatch (does not serialize)
+
+type ActorRef = "self" | "partner" | "player" | { id: string };             // ref resolution at eval time
+
+function evaluate<S>(p: Predicate<S>, state: S, refs: Refs): boolean;
+function evaluateAll<S>(ps: Predicate<S>[], state: S, refs: Refs): boolean;
+
+// src/lib/trigger.ts
+interface ConditionalTrigger<S, E> {
+  id: string;
+  when: Predicate<S>;                              // must evaluate true
+  probability: number | ((state: S) => number);   // state-dependent allowed
+  effect: E;                                       // payload, fired by caller
+  cooldown?: number;                               // ms — prevents rapid re-fire
+  oneShot?: boolean;                               // fires at most once
+}
+
+class TriggerSet<S, E> {
+  triggers: ConditionalTrigger<S, E>[]
+  evaluate(state: S, rng: RngStream): E[]          // returns all firing effects
+  // toJSON/fromJSON for cooldown state + oneShot fired-flags persistence
+}
+```
+
+Use cases across the catalog (every shape touches this):
+- LT: "when arcology rep > 70 AND time-since-last-faction-encounter > 7 days, 30% chance faction approaches you"
+- CoC: "when corruption tier = mostly-pure AND consumed-tincture-X within 24h, 100% chance demoness TF"
+- Zork: "when player in maze AND has-grue-protection = false AND in-darkness, 80% chance grue eats player"
+- FC: "when slave obedience tier = rebellious AND health > 50 AND unguarded, 15% chance escape attempt"
+- Warframe-shape: "when player defeated 5+ enemies tagged=Y AND form-X not yet unlocked, 100% chance form-X drops"
+- Breeding-sim: "when paired with sire tag=alpha AND gestation > 4 weeks, 25% chance offspring inherits tag=alpha-traits"
+- Pregnancy-sim: "when gestation = 6-8 weeks AND no-fitness-routine within 48h, 60% chance morning-sickness event"
+- Facility-management: "when room.heat-output > capacity AND no-fire-suppression, 5% chance fire event per tick" (then `spatialPropagationPattern` handles the spread)
+
+Design notes:
+- **Scope / target resolution.** Predicates declare role-name refs (`self`, `partner`, etc.); the evaluator takes a `Refs` dict mapping role names to entities. Predicate stays generic; resolution happens at eval site.
+- **Serialization vs power.** Pure-data tagged-union predicates serialize cleanly; `custom` escape-hatch loses JSON round-trip. Ship both with a clear "custom predicates won't survive saves" warning in the doc.
+- **Composition with tags.ts query DSL.** `tags.ts` already has `!` negation + AND-of-tags queries. Probably `kind: "tag-query"` predicates use that DSL inline as a string for advanced tag matching.
+- **Cooldown / oneShot state.** Lives in TriggerSet's serializable state. Shard-able like everything else.
+- **Probability functions.** State-dependent `(state) => number` loses serialization. Alternative: `{ base: number; modifiers: PredicateBasedModifier[] }` — fully serializable. Ship both; escape hatch with serialization warning.
+
+#### `procgen.recombine` (Wave 1 amendment)
+
+The genetics helper uses `ConditionalTrigger` for mutations, not a flat `mutationRate` parameter. Mutations are themselves predicate-gated probabilistic triggers — same primitive shape as every other "X chance under Y conditions" mechanic. The flat-rate framing was lazy; the trigger-set framing generalizes.
+
+```ts
+procgen.recombine({
+  parents: [a, b],
+  traitPool: Registry<Trait>,
+  inheritance: 'mendelian' | 'blended' | 'dominant-recessive' | CustomInheritance,
+  mutations: ConditionalTrigger<ChildGenotype, MutationEffect>[]   // predicate-gated
+})
+```
 
 ### Wave 2A — erotic-RPG axis
 
@@ -187,7 +279,7 @@ Each controller is a pattern, not a primitive; composes input + physics-kinemati
 
 ### Wave 3 — example stages
 
-All 16 game-shape stages ship in parallel as their dependent waves complete.
+All 20 game-shape stages ship in parallel as their dependent waves complete.
 
 - CCA, Zork, HHGTTG ship after Wave 2B.
 - CoC, TiTS ship after Wave 2A.
@@ -201,6 +293,10 @@ All 16 game-shape stages ship in parallel as their dependent waves complete.
 - Platformer-shape ships after Waves 2F (planck 2D physics) + 2H (sidescroller controller).
 - Spacesim-shape ships after Waves 2F + 2H (vehicle controller).
 - RTS-shape ships after Waves 2F + 2H (cursor controller + pathfinding).
+- Pregnancy-sim-shape (#17) ships after Wave 2A (scene) + Wave 1.5 (predicate/trigger) + `dailyVignettePattern`.
+- Breeding-sim-shape (#18) ships after Wave 1.5 (`procgen.recombine` + predicate/trigger) + Wave 2C.
+- Subject-life-sim-shape (#19) ships after Waves 2A + 2B + Wave 1.5 (ConditionalTrigger) + `subjectSandboxPattern`.
+- Facility-management-shape (#20) ships after Waves 2B + 2C + 2E (TileGrid) + Wave 1.5 (ConditionalTrigger) + `slotAssignmentPattern` + `spatialPropagationPattern`.
 
 No ordering precedence among examples — each ships when its wave dependencies land. The "smallest goes first" heuristic puts FC and Warframe-shape near the front (Wave 2C / 2D have no new primitives); parser-IF games are last because Wave 2B is the biggest primitive block.
 
@@ -248,6 +344,15 @@ Each `src/lib/patterns/<name>.ts` is 90% wiring + 10% defaults. No private state
 - `form-collection.ts` — `PlaceholderRegistry<Form>` with unlock progression
 - `grafting.ts` — Helminth-style ability transfer
 - `puppet.ts` — actor-piloting-actor
+
+### Wave 1.5-dependent composers
+
+- `subjectSandboxPattern` — first-person life-sim sandbox where player IS the subject in a world of NPC relationships. Composes world + actor + scheduler + scene + predicate-triggers + `dailyVignettePattern` + Timeline. Distinct from `sandboxPattern` (free-roam exploration framing — Zelda/Skyrim-style); subject-sandbox is about *life and relationships*, not exploration and combat. Used by Subject-life-sim-shape (#19), Pregnancy-sim-shape (#17), Dating-sim, future life-sim shapes.
+- `dailyVignettePattern` — wraps `generate` + `observation` + `Timeline` + `scheduler` to produce one well-grounded vignette per game-day tick, with continuity from past vignettes. Slice-of-life equivalent of `bulkTickPattern`: bulkTick advances many actors in parallel; daily-vignette advances ONE subject deeply through time. Used across the slice-of-life-texture meta-category.
+- `slotAssignmentPattern` — "worker X is assigned to room slot Y" relation. Composes ActorPool + Room's assigned-workers list + per-slot constraint predicates + `ConditionalTrigger` for slot-validity. Used by Facility-management-shape (#20), FC-shape (#8) slave job assignments, Warframe-shape (#9) loadout slots, any "assign actor to slot" mechanic.
+- `spatialPropagationPattern` — events propagate room-to-room through the world graph: fire spreads to adjacencies, raiders move next-turn, infections jump on contact, panic radiates from incident sites. Composes World graph + ConditionalTrigger + Scheduler tick. Hugely reusable: plague spread (FS-shape), gossip propagation (LT-shape), faction territory shift (LT-shape), contamination (Lobotomy variant of #20), wildfire (any wilderness sandbox).
+- `focusPattern` — directs player attention to whatever's currently interesting (a fire, a low-energy worker, an incoming raid, a containment breach). Composes Observation salience + Timeline urgency + UI panels. The "what should the player look at now" mechanic. Used by Facility-management-shape (#20), RTS-shape (#15), FC-shape (#8), any high-action-density managerial stage.
+- `lineagePattern` — composer over `procgen.buildGraph` (tree connectivity) + Actor.affinity-with-"parent"-tag for parent-child relationships. Operations like "list descendants," "find common ancestor," "compute inbreeding coefficient" fall out as graph queries. Pattern, not primitive — reduces to Actor + procgen + Graph queries. Used by Breeding-sim-shape (#18), FC-shape (#8), LT-shape (#6, dynasty tracking).
 
 ### Synergy patterns — procgen × LLM cooperation
 
@@ -342,3 +447,4 @@ Read-only investigation tasks that should precede their dependent design work.
 - Wave 1 (Actor + Procgen + Generate) not yet planned; next durable work after this ROADMAP.
 - Branch `main` is ~25 commits ahead of origin; not pushed.
 - **Scope expansion 2026-05-23**: Waves 2E (UI), 2F (3D), 2G (sensory), 2H (controllers + AI) added. Game shipping catalog expanded from 9 to 16 shapes. Library is now a chub-stage game engine; modular packaging via dynamic imports keeps core lean.
+- **Catalog expansion 2026-05-24**: Game shipping catalog expanded from 16 to 20 shapes. Added catalog taxonomy (atomic / umbrella / composite). Added Wave 1.5 (predicate/trigger + procgen.recombine). Added 6 new pattern composers (subjectSandboxPattern, dailyVignettePattern, slotAssignmentPattern, spatialPropagationPattern, focusPattern, lineagePattern). Added slice-of-life-texture meta-category note.
