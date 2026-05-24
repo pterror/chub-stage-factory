@@ -42,6 +42,7 @@
  *       getRelation?(subject, object, relation, state): number;
  *       sinceEvent?(event, state): number;       // ms since
  *       getFlag?(flag, state): unknown;
+ *       getField?(actor, field, state): string | undefined;   // regex / glob
  *       customs?: Record<id, (state, refs) => boolean> }
  *   type Predicate<S>
  *     | { kind: "tag-on"; target; tag }
@@ -52,6 +53,8 @@
  *     | { kind: "actor-relation"; subject; object; relation; op?; value? }
  *     | { kind: "since"; event; op; duration }
  *     | { kind: "world-flag"; flag; value? }
+ *     | { kind: "regex"; target; field; pattern; flags? }
+ *     | { kind: "glob"; target; field; pattern }
  *     | { kind: "and"; clauses }
  *     | { kind: "or"; clauses }
  *     | { kind: "not"; inner }
@@ -84,6 +87,8 @@ export type Predicate<S = unknown> =
     }
   | { kind: "since"; event: string; op: "<" | ">"; duration: number }
   | { kind: "world-flag"; flag: string; value?: unknown }
+  | { kind: "regex"; target: ActorRef; field: string; pattern: string; flags?: string }
+  | { kind: "glob"; target: ActorRef; field: string; pattern: string }
   | { kind: "and"; clauses: Predicate<S>[] }
   | { kind: "or"; clauses: Predicate<S>[] }
   | { kind: "not"; inner: Predicate<S> }
@@ -105,9 +110,40 @@ export interface Resolvers<S = unknown, A = unknown> {
   getRelation?: (subject: A, object: A, relation: string, state: S) => number | undefined;
   sinceEvent?: (event: string, state: S) => number | undefined;
   getFlag?: (flag: string, state: S) => unknown;
+  /** Read a named string field off an actor; powers `regex` / `glob`
+   *  predicate kinds. Return `undefined` when the actor has no such
+   *  field — the predicate evaluates false. */
+  getField?: (actor: A, field: string, state: S) => string | undefined;
   /** Function bodies for `{ kind: "custom"; id }`. Caller re-supplies these
    *  on load (predicates serialize id-only). */
   customs?: Record<string, (state: S, refs: Refs<A>) => boolean>;
+}
+
+/** Compile a shell-style glob pattern to a RegExp.
+ *  Supports `*` (any chars), `?` (single char), and `[abc]` character
+ *  classes. Anchored full-match. Other regex metacharacters are escaped. */
+function compileGlob(pattern: string): RegExp {
+  let out = "^";
+  for (let i = 0; i < pattern.length; i++) {
+    const c = pattern[i];
+    if (c === "*") out += ".*";
+    else if (c === "?") out += ".";
+    else if (c === "[") {
+      const close = pattern.indexOf("]", i);
+      if (close === -1) {
+        out += "\\[";
+      } else {
+        out += pattern.slice(i, close + 1);
+        i = close;
+      }
+    } else if (/[.+^$(){}|\\]/.test(c)) {
+      out += "\\" + c;
+    } else {
+      out += c;
+    }
+  }
+  out += "$";
+  return new RegExp(out);
 }
 
 function resolveRef<A>(ref: ActorRef, refs: Refs<A>): A | undefined {
@@ -187,6 +223,24 @@ export function evaluate<S = unknown, A = unknown>(
       const v = resolvers.getFlag(p.flag, state);
       return p.value === undefined ? Boolean(v) : v === p.value;
     }
+    case "regex": {
+      const a = resolveRef(p.target, refs);
+      if (a === undefined || !resolvers.getField) return false;
+      const v = resolvers.getField(a, p.field, state);
+      if (v === undefined) return false;
+      try {
+        return new RegExp(p.pattern, p.flags).test(v);
+      } catch {
+        return false;
+      }
+    }
+    case "glob": {
+      const a = resolveRef(p.target, refs);
+      if (a === undefined || !resolvers.getField) return false;
+      const v = resolvers.getField(a, p.field, state);
+      if (v === undefined) return false;
+      return compileGlob(p.pattern).test(v);
+    }
     case "custom": {
       const fn = resolvers.customs?.[p.id];
       if (!fn) return false;
@@ -228,6 +282,12 @@ export const P = {
     kind: "since", event, op, duration,
   }),
   flag: (flag: string, value?: unknown): Predicate => ({ kind: "world-flag", flag, value }),
+  regex: (target: ActorRef, field: string, pattern: string, flags?: string): Predicate => ({
+    kind: "regex", target, field, pattern, flags,
+  }),
+  glob: (target: ActorRef, field: string, pattern: string): Predicate => ({
+    kind: "glob", target, field, pattern,
+  }),
   and: (...clauses: Predicate[]): Predicate => ({ kind: "and", clauses }),
   or: (...clauses: Predicate[]): Predicate => ({ kind: "or", clauses }),
   not: (inner: Predicate): Predicate => ({ kind: "not", inner }),
