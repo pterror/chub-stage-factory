@@ -242,6 +242,25 @@ lookup after you know what you're looking for.
   - `toJSON(): TimelineEvent<E>[]`, `static fromJSON(data, opts?)`
 - `summarize(events, render): string` — newline-joined; debug pane only
 
+## `predicate.ts`
+
+- `type ActorRef = "self" | "partner" | "player" | { id: string }`
+- `type CompareOp = ">" | "<" | "==" | "!=" | ">=" | "<="`
+- `type Predicate<S>` — tagged union: `tag-on`, `stat`, `stat-tier`, `has-item`, `located-at`, `actor-relation`, `since`, `world-flag`, `and`, `or`, `not`, `custom`
+- `interface Refs<A> { self?, partner?, player?, byId? }`
+- `interface Resolvers<S, A> { getTag?, getStat?, getStatTier?, hasItem?, getLocation?, getRelation?, sinceEvent?, getFlag?, customs? }`
+- `evaluate<S, A>(p, state, refs, resolvers?): boolean`
+- `evaluateAll<S, A>(ps, state, refs, resolvers?): boolean`
+- `P` — compact builder namespace: `tagOn`, `stat`, `statTier`, `hasItem`, `locatedAt`, `relation`, `since`, `flag`, `and`, `or`, `not`, `custom`
+
+## `trigger.ts`
+
+- `interface ProbabilityModifier<S> { when: Predicate<S>; mult: number }`
+- `type Probability<S> = number | { base, modifiers } | ((state) => number)`
+- `interface ConditionalTrigger<S, E> { id, when, probability, effect, cooldown?, oneShot? }`
+- `interface TriggerSetState { lastFiredAt, fired }`
+- `class TriggerSet<S, E, A> { triggers; resolvers; constructor(triggers, resolvers?); evaluate(state, refs, rng, now?): E[]; reset(id?); toJSON(); static fromJSON(triggers, data, resolvers?) }`
+
 ## `prose-register.ts`
 
 - `type ArchitectureName` (10 entries; see PROSE.md)
