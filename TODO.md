@@ -1,5 +1,49 @@
 # TODO
 
+> *Open threads from previous sessions. Treat as starting context, not
+> instructions — verify relevance before acting. The next session serves
+> the user, not these threads. The user may want to go in a completely
+> different direction, and that's fine.*
+
+## Frontend pivot — next direction the previous session was leaning toward
+
+The previous session worked through three phases in sequence: Wave 1.5
++ 2I keystone primitives shipped, then a 6-source mining round
+(SillyTavern/NovelAI/AID synergy, TiTS+LT scene composition, Warframe
+Helminth, Lord-Raven voronoi, Rapier controllers, R3F embedded
+practices), then 4 parallel implementation waves (Scene primitive,
+VoronoiInfluenceMap UI, ThreeScene R3F wrapper, LlmPipeline primitive
++ embeddings + 14 synergy patterns + predicate/context extensions).
+
+The fourth phase the session had queued but did not start: pivot to
+"the roleplay frontend that is just good" (see `src/lib/COMPOSITION.md`
+final section and `src/lib/ROADMAP.md`). Two sub-flavors are open:
+
+1. **Crescent forward** — port the design (primitives + patterns +
+   persistence model + COMPOSITION.md framings) into
+   `~/git/rhizone/crescent/` (LuaJIT ecosystem). Tests whether the
+   design is genuinely portable past Chub-the-host. See the existing
+   "HIGH PRIORITY — Forward designs to Crescent" thread below for what
+   likely ports vs what stays chub-specific.
+
+2. **Non-Chub frontend design** — sketch what a standalone roleplay
+   frontend looks like (world-state primary, chat-log as side-panel,
+   structured input, single-shot prompting). Could be a separate repo,
+   a new shape for chub-stage-factory's library, or a planning doc only.
+
+Open question the session did not resolve: is this a fresh-session opus
+design exploration, or does it want a mining pass first (SillyTavern
+frontend, Risu, Agnaistic, etc. as prior art for roleplay-frontend
+shapes)? The pattern this session followed elsewhere — mine first,
+design second, implement third — suggests mining first. But the design
+intent is largely written down already (`COMPOSITION.md` + `ROADMAP.md`),
+so any mining might be quick.
+
+Whichever direction: the previous session recommended starting cold in a
+fresh context, drawing on the durable docs rather than this session's
+tactical chatter. `src/lib/{README,COMPOSITION,ROADMAP}.md` plus
+`CLAUDE.md` north stars are the load-bearing inputs.
+
 ## HIGH PRIORITY — Forward designs to Crescent
 
 Once the patterns layer is polished (post-Wave 2D minimum; ideally post-Waves 2E/F/G/H), evaluate forwarding the primitives + patterns + persistence model + COMPOSITION.md framings to `~/git/rhizone/crescent/` (Crescent is the LuaJIT ecosystem; the patterns are language-agnostic and the design intent for a "roleplay frontend that is just good" extends beyond chub-stage-factory).
@@ -81,27 +125,34 @@ See `src/lib/COMPOSITION.md` for the positioning rationale. Summary: every `PATT
 
 **Initial composer candidates** (one file per row, paired with the recipe of the same name):
 
-- `src/lib/patterns/inventory.ts`
-- `src/lib/patterns/effects.ts`
-- `src/lib/patterns/turn-combat.ts`
-- `src/lib/patterns/realtime-combat.ts`
-- `src/lib/patterns/body-transformation.ts`
-- `src/lib/patterns/cyber-slots.ts`
-- `src/lib/patterns/physics.ts`
-- `src/lib/patterns/scene.ts` (after `scene.ts` primitive lands)
-- `src/lib/patterns/world-exploration.ts` (after `world.ts` primitive lands)
-- `src/lib/patterns/dialogue.ts`
-- `src/lib/patterns/score.ts`
-- `src/lib/patterns/faction.ts` (composes `stats.ts` + content-gate predicate; reduces, no primitive needed)
-- `src/lib/patterns/skit.ts` (composes scene + observation + outcome resolution + actor; PARC's Skit shape as composition)
-- `src/lib/patterns/sandbox.ts`
-- `src/lib/patterns/synergy/llm-narrates-programmatic-tracks.ts`
-- `src/lib/patterns/synergy/programmatic-narrates-llm-decides.ts`
-- `src/lib/patterns/synergy/llm-constrained-by-procgen.ts`
-- `src/lib/patterns/synergy/procgen-validates-llm.ts`
-- `src/lib/patterns/synergy/cache-by-key.ts`
-- `src/lib/patterns/synergy/fallback-chain.ts`
-- `src/lib/patterns/synergy/seed-from-player.ts`
+- `src/lib/patterns/inventory.ts` — pending
+- `src/lib/patterns/effects.ts` — pending
+- `src/lib/patterns/turn-combat.ts` — pending
+- `src/lib/patterns/realtime-combat.ts` — pending
+- `src/lib/patterns/body-transformation.ts` — pending
+- `src/lib/patterns/cyber-slots.ts` — pending
+- `src/lib/patterns/physics.ts` — pending
+- `src/lib/patterns/scene.ts` — **shipped** (Wave 2A, commit `d9267e8`)
+- `src/lib/patterns/world-exploration.ts` — pending (blocked on `world.ts` primitive)
+- `src/lib/patterns/dialogue.ts` — pending
+- `src/lib/patterns/score.ts` — pending
+- `src/lib/patterns/faction.ts` — pending (composes `stats.ts` + content-gate predicate; reduces, no primitive needed)
+- `src/lib/patterns/skit.ts` — pending (composes scene + observation + outcome resolution + actor; PARC's Skit shape as composition)
+- `src/lib/patterns/sandbox.ts` — pending
+- `src/lib/patterns/synergy/*.ts` — 14 composers from Wave 2I expansion
+  **shipped** (see `src/lib/patterns/synergy/`; covers
+  recursive-key-expansion, positional-injection-depth, inclusion-group-mutex,
+  sticky-cooldown-delay-timers, recency-frequency-eviction,
+  force-activate-with-budget-cap, subcontext-group-budgeting,
+  triplehook-pipeline, quiet-generation-sub-call,
+  scripted-quick-reply-macro, semantic-recall-overlay, scheduled-self-check,
+  character-filtered-activation, override-slots). The 8 originals named in
+  prior planning (llm-narrates-programmatic-tracks,
+  programmatic-narrates-llm-decides, llm-constrained-by-procgen,
+  procgen-validates-llm, cache-by-key, fallback-chain, seed-from-player,
+  hierarchical-summarization) remain documented in PATTERNS.md but have
+  not been extracted as `src/lib/patterns/synergy/*.ts` composer files yet
+  — could be a small follow-up pass to retrofit them.
 
 Each composer is 90% wiring + 10% defaults; no private state; no new mechanics. The 7-games examples (CCA, Zork, HHGTTG, TiTS-shape, CoC-shape, LT-shape, FS-shape) are downstream of this — they're catalogs of which patterns each game uses.
 
