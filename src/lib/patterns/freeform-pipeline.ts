@@ -15,7 +15,6 @@
  *            - `strict` — reject deltas that fail `validateDelta`.
  *            - `coerce` — remap invalid delta fields to their nearest
  *              legal values via `coerceDelta`, then apply.
- *            - `extend` — not implemented; throws with a TODO.
  *         5. `applyDelta(delta)` mutates state.
  *         6. `render(stub?)` produces prose (stub from oracle or null).
  *
@@ -30,7 +29,7 @@
  *      composed here. This file has no state of its own.
  *
  * SHAPE:
- *   type SandboxPolicy = "strict" | "coerce" | "extend"
+ *   type SandboxPolicy = "strict" | "coerce"
  *   interface OracleDelta<D> { delta: D; stub?: RenderStub }
  *   interface FreeformPipelineOptions<S, D>
  *     { text; scope; parseOptions?; oracle; validateDelta?;
@@ -45,7 +44,7 @@ import { generate, type SchemaParser } from "../generate";
 import { parseIntent, type Intent, type ParseIntentOptions } from "../intent";
 import type { RenderStub } from "./render-trigger";
 
-export type SandboxPolicy = "strict" | "coerce" | "extend";
+export type SandboxPolicy = "strict" | "coerce";
 
 export type PolicyOutcome = "grammar-hit" | "oracle-applied" | "oracle-coerced" | "rejected" | "error";
 
@@ -140,12 +139,6 @@ export async function freeformPipeline<D>(
   opts: FreeformPipelineOptions<D>,
 ): Promise<FreeformResult<D>> {
   const policy = opts.policy ?? "coerce";
-
-  if (policy === "extend") {
-    throw new Error(
-      "freeformPipeline: sandbox policy 'extend' is not implemented (TODO: Wave 2B+).",
-    );
-  }
 
   // 1. Intent parse (grammar + optional LLM fallback within parseIntent).
   const intent = await parseIntent(opts.text, opts.scope, opts.parseOptions);
