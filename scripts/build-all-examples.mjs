@@ -13,6 +13,7 @@ const repo = resolve(fileURLToPath(import.meta.url), "..", "..");
 const examplesDir = join(repo, "examples");
 
 const names = readdirSync(examplesDir).filter((n) => {
+  if (n.startsWith("_")) return false;
   const p = join(examplesDir, n);
   return statSync(p).isDirectory() && existsSync(join(p, "Stage.tsx"));
 });
