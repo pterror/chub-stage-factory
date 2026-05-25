@@ -20,8 +20,7 @@
  */
 
 import { ReactElement } from "react";
-import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
+import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, runRound, AttackProfile, CombatEvent } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
@@ -33,7 +32,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
-  bindStore, mergeResponses, shard,
+  mergeResponses, shard, withPersistence,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { round: number; choice?: string; [k: string]: unknown }
@@ -109,7 +108,7 @@ function restoreCombatants(holder: { cs: Combatant[]; ended?: "pc-down" | "enemy
   holder.ended = data.ended;
 }
 
-export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
+export class TurnCombatStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
   rng = Rng.fromSeed("temple-steps");
   combatants: Combatant[];
   combatantsHolder: { cs: Combatant[]; ended?: "pc-down" | "enemy-down" };
@@ -118,8 +117,6 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
   lastRound: CombatEvent[] = [];
   habituation = new Map<string, number>();
   layers = createChubLayers();
-  store!: PersistenceStore;
-  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
@@ -129,7 +126,7 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
       messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
       chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
     });
-    this.store = new PersistenceStore({
+    this.initStore(() => new PersistenceStore({
       turn: shard("turn", this.turn,
         (i) => ({ n: i.n, choice: i.choice }),
         (d: { n: number; choice: "swing" | "guard" | "sunder" }) => ({ n: d.n, choice: d.choice }),
@@ -142,18 +139,7 @@ export class TurnCombatStage extends StageBase<InitStateType, ChatStateType, Mes
           return holder;
         },
         this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-    });
-    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
-  }
-
-  async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    await this.store.load();
-    const { chatState, messageState } = await this.bound.initial();
-    return { success: true, error: null, initState: null, chatState, messageState };
-  }
-
-  async setState(state: MessageStateType): Promise<void> {
-    await this.bound.setState(state);
+    }));
   }
 
   private chooseFor = (actor: Combatant, world: World) => {

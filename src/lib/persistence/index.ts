@@ -44,3 +44,5 @@ export {
   counterShard,
   layerShards,
 } from "./chub";
+
+export { withPersistence } from "./with-persistence";

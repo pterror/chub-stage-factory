@@ -6,7 +6,7 @@
  * with the right stacking policy and trajectory. `tick` per turn drains
  * expired effects.
  *
- * Primitives: effects, scheduler, tag-parser, chub-adapters, persistence.
+ * Primitives: effects, tag-parser, chub-adapters, persistence.
  * Philosophy: rule #3 (effects.tick returns the expired set; the stage
  * decides what to do with it), rule #6 (elapsed = now - startTime).
  *
@@ -15,17 +15,16 @@
  */
 
 import { ReactElement } from "react";
-import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
+import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { EffectDef, EffectStore, EffectMagnitudes } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
-import { Scheduler } from "../../src/lib/scheduler";
 import { Timeline, summarize } from "../../src/lib/timeline";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
-  PersistenceStore, createChubLayers, chubTreeHistory, bindStore, mergeResponses, counterShard, shardOf,
+  PersistenceStore, createChubLayers, chubTreeHistory, mergeResponses, counterShard, shardOf,
+  withPersistence,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }
@@ -59,45 +58,31 @@ const TINCTURES = new Registry<EffectDef>({
   },
 });
 
-export class EffectsStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
-  store = new EffectStore();
-  scheduler = new Scheduler<{ store: EffectStore }>({ store: this.store });
+export class EffectsStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
+  effectStore = new EffectStore();
   tick = { n: 0 };
   events = new Timeline<string>({ id: "tincture-events", channels: ["interoceptive"], windowSize: 20, habituationTau: 2 });
   layers = createChubLayers();
-  pStore!: PersistenceStore;
-  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
     this.layers = createChubLayers({
       messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
     });
-    this.pStore = new PersistenceStore({
+    this.initStore(() => new PersistenceStore({
       tick: counterShard("tick", this.tick, this.layers.messageStateBackend, chubTreeHistory()),
-      effects: shardOf("effects", this.store, (d) => EffectStore.fromJSON(d, TINCTURES.toJSON()), this.layers.messageStateBackend, chubTreeHistory()),
-    });
-    this.bound = bindStore<ChatStateType, MessageStateType>(this.pStore, { layers: this.layers });
-  }
-
-  async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    await this.pStore.load();
-    const { chatState, messageState } = await this.bound.initial();
-    return { success: true, error: null, initState: null, chatState, messageState };
-  }
-
-  async setState(state: MessageStateType): Promise<void> {
-    await this.bound.setState(state);
+      effects: shardOf("effects", this.effectStore, (d) => EffectStore.fromJSON(d, TINCTURES.toJSON()), this.layers.messageStateBackend, chubTreeHistory()),
+    }));
   }
 
   private observationSources(now: number): ObservationSource<{ now: number }>[] {
     return [
       {
         id: "active-effects", channels: ["interoceptive"],
-        salience: () => Math.min(1, this.store.active().length / 3), habituationTau: 3,
+        salience: () => Math.min(1, this.effectStore.active().length / 3), habituationTau: 3,
         properties: { interoceptive: {
-          active: () => this.store.active().map((i) => {
-            const m: EffectMagnitudes = this.store.magnitudesFor(i.id, now) ?? {};
+          active: () => this.effectStore.active().map((i) => {
+            const m: EffectMagnitudes = this.effectStore.magnitudesFor(i.id, now) ?? {};
             return {
               id: i.id,
               remaining: i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : null,
@@ -118,7 +103,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     this.tick.n += 1;
     const now = this.tick.n;
-    const expired = this.store.tick(now);
+    const expired = this.effectStore.tick(now);
     for (const e of expired) this.events.push(`expired:${e.id}`, now);
 
     const observed = assembleObservations(
@@ -145,12 +130,12 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
     const applyId = typeof r1.parsed.apply === "string" ? (r1.parsed.apply as string).trim() : "";
     const tincture = applyId ? TINCTURES.get(applyId) : undefined;
     if (tincture) {
-      this.store.apply(tincture, now);
+      this.effectStore.apply(tincture, now);
       this.events.push(`applied:${applyId}`, now);
     }
     const dispelTag = typeof r2.parsed.dispel === "string" ? (r2.parsed.dispel as string).trim() : "";
     if (dispelTag) {
-      const dispelled = this.store.dispelByTag(dispelTag);
+      const dispelled = this.effectStore.dispelByTag(dispelTag);
       for (const d of dispelled) this.events.push(`dispelled:${d.id}`, now);
     }
     const stripped = r2.stripped !== botMessage.content ? r2.stripped : null;
@@ -159,7 +144,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
 
   render(): ReactElement {
     const now = this.tick.n;
-    const active = this.store.active();
+    const active = this.effectStore.active();
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
         <h3 style={{ marginTop: 0 }}>Klio&apos;s bench — tick {now}</h3>
@@ -168,7 +153,7 @@ export class EffectsStage extends StageBase<InitStateType, ChatStateType, Messag
           <ul>
             {active.map((i) => {
               const remaining = i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : "∞";
-              const mag = this.store.magnitudesFor(i.id, now);
+              const mag = this.effectStore.magnitudesFor(i.id, now);
               return (
                 <li key={i.id}>
                   <b>{i.id}</b> ×{i.count} — remaining {String(remaining)} — {JSON.stringify(mag?.stats ?? {})} {mag?.tagsAdd?.join(",")}

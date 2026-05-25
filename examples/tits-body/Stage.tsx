@@ -17,8 +17,7 @@
  */
 
 import { ReactElement } from "react";
-import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
+import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { Body } from "../../src/lib/body";
 import { Registry } from "../../src/lib/registry";
 import { Timeline } from "../../src/lib/timeline";
@@ -29,7 +28,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
-  bindStore, mergeResponses, shard, shardOf,
+  mergeResponses, shard, shardOf, withPersistence,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; lastApplied?: string; [k: string]: unknown }
@@ -65,14 +64,12 @@ const TFS = new Registry<TransformationDef>({
   },
 });
 
-export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
+export class TitsBodyStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
   body: Body;
   snaps: Snapshots;
   tick = { n: 0, lastApplied: undefined as string | undefined };
   applied = new Timeline<string>({ id: "tinctures-applied", channels: ["interoceptive"], key: "applied", windowSize: 8, habituationTau: 6 });
   layers = createChubLayers();
-  store!: PersistenceStore;
-  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
@@ -90,7 +87,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
       messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
       chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
     });
-    this.store = new PersistenceStore({
+    this.initStore(() => new PersistenceStore({
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, lastApplied: i.lastApplied }),
         (d: { n: number; lastApplied?: string }) => ({ n: d.n, lastApplied: d.lastApplied }),
@@ -100,18 +97,7 @@ export class TitsBodyStage extends StageBase<InitStateType, ChatStateType, Messa
         (i) => i.toJSON(),
         (d: ReturnType<Snapshots["toJSON"]>) => Snapshots.fromJSON(d, this.body),
         this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-    });
-    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
-  }
-
-  async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    await this.store.load();
-    const { chatState, messageState } = await this.bound.initial();
-    return { success: true, error: null, initState: null, chatState, messageState };
-  }
-
-  async setState(state: MessageStateType): Promise<void> {
-    await this.bound.setState(state);
+    }));
   }
 
   private tryApply(id: string, now: number): { ok: boolean; reason?: string } {
