@@ -227,35 +227,37 @@ async function runScenario(scenarioPath, overrideExampleName) {
 
   // Get factory from headless bundle
   // When --delegator is set, import src/Stage.tsx (the top-level delegator).
-  // Otherwise, import examples/<name>/Stage.tsx directly.
+  // Otherwise, look up the example by name in examples/registry.ts.
   let factory;
   try {
-    let stagePath;
     if (isDelegate) {
-      stagePath = resolve(repo, "src", "Stage.tsx");
+      const stagePath = resolve(repo, "src", "Stage.tsx");
       if (!existsSync(stagePath)) {
         console.error(`[run-stage] delegator Stage not found at ${stagePath}`);
         return false;
       }
       console.log(`[run-stage] delegator mode: loading top-level Stage from ${stagePath}`);
-    } else {
-      stagePath = resolve(repo, "examples", targetExample, "Stage.tsx");
-      if (!existsSync(stagePath)) {
-        console.error(`[run-stage] no stage found at ${stagePath}`);
-        console.error(`[run-stage] valid examples: inventory, effects, turn-combat, tits-body, cyber-slots, physics, realtime-combat, composite-showcase, world-primary`);
+      const stageModule = await import(stagePath);
+      const StageClass = Object.values(stageModule).find(
+        (v) => typeof v === "function" && v.prototype && typeof v.prototype.load === "function"
+      );
+      if (!StageClass) {
+        console.error(`[run-stage] no StageBase subclass found in ${stagePath}`);
         return false;
       }
+      factory = (data) => new StageClass(data);
+    } else {
+      const registryPath = resolve(repo, "examples", "registry.ts");
+      const registryModule = await import(registryPath);
+      const entry = registryModule.getExample(targetExample);
+      if (!entry) {
+        const validNames = registryModule.EXAMPLES.map((e) => e.name).join(", ");
+        console.error(`[run-stage] unknown example: "${targetExample}"`);
+        console.error(`[run-stage] valid examples: ${validNames}`);
+        return false;
+      }
+      factory = entry.factory;
     }
-    const stageModule = await import(stagePath);
-    // Find any exported class with a load() method
-    const StageClass = Object.values(stageModule).find(
-      (v) => typeof v === "function" && v.prototype && typeof v.prototype.load === "function"
-    );
-    if (!StageClass) {
-      console.error(`[run-stage] no StageBase subclass found in ${stagePath}`);
-      return false;
-    }
-    factory = (data) => new StageClass(data);
   } catch (err) {
     console.error(`[run-stage] failed to load stage class: ${err.message}`);
     return false;
