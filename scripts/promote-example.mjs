@@ -224,6 +224,7 @@ const REMOVE_SCRIPTS_FILES = [
   "deploy-example.mjs",
   "build-delegator.mjs",
   "deploy-delegator.mjs",
+  // _deploy-core.mjs is kept — deploy.mjs imports it.
 ];
 for (const f of REMOVE_SCRIPTS_FILES) {
   del(join(out, "scripts", f));
@@ -231,7 +232,8 @@ for (const f of REMOVE_SCRIPTS_FILES) {
 console.log("[promote] removed factory scripts");
 
 // ---------------------------------------------------------------------------
-// 8. Write out/scripts/deploy.mjs — simple single-stage deploy
+// 8. Write out/scripts/deploy.mjs — thin wrapper over _deploy-core.mjs
+//    _deploy-core.mjs is already present (copied with the rest of scripts/).
 // ---------------------------------------------------------------------------
 const deployScript = `#!/usr/bin/env node
 /*
@@ -240,32 +242,22 @@ const deployScript = `#!/usr/bin/env node
  *   STAGE_ID=... CHUB_AUTH_TOKEN=... node scripts/deploy.mjs
  */
 
-import { execSync } from "node:child_process";
-import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { deployDist } from "./_deploy-core.mjs";
 
 const repo = resolve(fileURLToPath(import.meta.url), "..", "..");
-const distDir = join(repo, "dist");
-
-if (!existsSync(distDir)) {
-  console.error(\`no build at \${distDir}; run "bun run build" first\`);
-  process.exit(2);
-}
-
 const stageId = process.env.STAGE_ID;
 const token = process.env.CHUB_AUTH_TOKEN;
 if (!stageId) { console.error("STAGE_ID not set"); process.exit(2); }
 if (!token) { console.error("CHUB_AUTH_TOKEN not set"); process.exit(2); }
 
-const zip = join(repo, "build.zip");
-execSync(\`rm -f \${zip} && cd \${distDir} && zip -r \${zip} *\`, { stdio: "inherit" });
-execSync(
-  \`curl -fsSL -H "CH-API-KEY: \${token}" -F "file=@\${zip}" https://api.chub.ai/extension/\${stageId}/upload\`,
-  { stdio: "inherit" },
-);
-execSync(\`rm -f \${zip}\`, { stdio: "inherit" });
-console.log(\`[deploy] -> \${stageId}: OK\`);
+deployDist({
+  distDir: join(repo, "dist"),
+  stageId,
+  token,
+  zipPath: join(repo, "build.zip"),
+});
 `;
 mkdirSync(join(out, "scripts"), { recursive: true });
 writeFileSync(join(out, "scripts", "deploy.mjs"), deployScript, "utf8");
