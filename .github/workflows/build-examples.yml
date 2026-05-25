@@ -20,6 +20,19 @@ jobs:
             | jq -R -s -c 'split("\n") | map(select(length>0))')
           echo "names=$names" >> "$GITHUB_OUTPUT"
 
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      # lint skipped: @typescript-eslint/eslint-plugin missing from devDependencies; add it before re-enabling.
+      - run: bun run test
+      - run: bun run test:smoke
+      - run: bun run build:examples
+
   build:
     needs: list-examples
     runs-on: ubuntu-latest
@@ -30,8 +43,8 @@ jobs:
         name: ${{ fromJSON(needs.list-examples.outputs.names) }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: "21.7.1"
-      - run: yarn install --frozen-lockfile || yarn install
+          bun-version: latest
+      - run: bun install --frozen-lockfile
       - run: node scripts/build-example.mjs ${{ matrix.name }}
