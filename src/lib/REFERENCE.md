@@ -115,12 +115,6 @@ lookup after you know what you're looking for.
 - `interface EffectInstance { id, def, startTime, count }`
 - `class EffectStore { apply(def, now); remove(id); dispelByTag(tag); active(); magnitudesFor(id, now); totalMagnitudes(now); tick(now); toJSON(); static fromJSON(data, defs) }`
 
-## `scheduler.ts`
-
-- `interface ScheduledEvent<T> { at, type, data? }`
-- `type Handler<S> = (event, state, scheduler) => ScheduledEvent[] | void`
-- `class Scheduler<S> { constructor(state); schedule(ev); on(type, handler); peek(); size(); clear(); tickTo(now): ScheduledEvent[]; toJSON(); static fromJSON(data, state, handlers?) }`
-
 ## `fsm.ts`
 
 - `interface TransitionObj<E> { to?, push?, pop?, emit? }`
