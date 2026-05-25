@@ -1,11 +1,12 @@
 {
   "name": "composition smoke",
+  "exampleName": "composite-showcase",
   "init": {
     "environment": "development",
     "users": {
       "0": {
         "anonymizedId": "0",
-        "name": "Traveler",
+        "name": "Player",
         "isRemoved": false,
         "chatProfile": ""
       }
@@ -13,12 +14,12 @@
     "characters": {
       "1": {
         "anonymizedId": "1",
-        "name": "Pak",
+        "name": "Maven",
         "isRemoved": false,
-        "description": "A wiry secondhand-stall keeper with ink-stained sleeves; remembers every item in the stall by where she last set it down.",
-        "personality": "Hoarder. Particular. Warm once she trusts you. Hates 'browsing'.",
-        "first_message": "Mind your elbows. Whatever you're after, just *say* it; I'll know where it is.",
-        "scenario": "A cluttered secondhand stall on a wet evening market.",
+        "description": "A cyberpunk clinic operator who runs a ripperdoc service and a stall.",
+        "personality": "Efficient. Professional. Transactional.",
+        "first_message": "What do you need?",
+        "scenario": "A cyberpunk clinic in a neon-lit district.",
         "example_dialogs": "",
         "tavern_personality": "",
         "system_prompt": "",
@@ -27,14 +28,7 @@
         "partial_extensions": {}
       }
     },
-    "config": {
-      "kind": "composed",
-      "instances": [
-        { "id": "inv", "stage": "inventory" },
-        { "id": "eff", "stage": "effects" }
-      ],
-      "layout": "tabs"
-    },
+    "config": null,
     "messageState": null,
     "chatState": null,
     "initState": null
@@ -44,7 +38,7 @@
       "type": "before",
       "message": {
         "anonymizedId": "0",
-        "content": "I'd like to buy something.",
+        "content": "I need something from the clinic.",
         "isBot": false,
         "promptForId": "1",
         "identity": "12345",
