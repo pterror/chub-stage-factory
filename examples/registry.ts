@@ -125,6 +125,8 @@ export const EXAMPLES: ExampleEntry[] = [
   },
 ];
 
+export type ExampleName = (typeof EXAMPLES)[number]["name"];
+
 export function getExample(name: string): ExampleEntry | undefined {
   return EXAMPLES.find((e) => e.name === name);
 }

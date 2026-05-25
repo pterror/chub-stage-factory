@@ -1,0 +1,40 @@
+project_name: "Chub Stage Factory — configurable demo delegator"
+tagline: "Configurable demo stage — pick any registered example per deployment."
+creator_notes: "Top-level delegator stage for chub-stage-factory. Instantiates and forwards to the selected example StageBase. One Chub deployment, one stage ID, per-use-configurable across all registered examples."
+visibility: 'UNLISTED'
+position: 'FULLSCREEN'
+tags:
+  - 'Stage'
+  - 'Example'
+  - 'Delegator'
+  - 'Factory'
+
+config_schema:
+  type: object
+  properties:
+    stage:
+      type: string
+      enum:
+        - world-primary
+        - inventory
+        - effects
+        - turn-combat
+        - tits-body
+        - cyber-slots
+        - physics
+        - realtime-combat
+        - composite-showcase
+      default: world-primary
+      description: "Which example stage to run."
+
+state_schema:
+  init:
+    type: object
+    nullable: true
+    properties: {}
+  message:
+    type: object
+    properties: {}
+  chat:
+    type: object
+    properties: {}

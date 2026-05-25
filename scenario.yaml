@@ -1,0 +1,5 @@
+name: "Chub Stage Factory Delegator"
+scenario: |
+  A configurable demonstration stage. The active example is selected via
+  the stage config's `stage` field. Each example showcases a different
+  set of primitives from the chub-stage-factory library. Default: world-primary.
