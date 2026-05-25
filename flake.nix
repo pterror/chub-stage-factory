@@ -15,7 +15,7 @@
         devShells.default = pkgs.mkShell rec {
           buildInputs = with pkgs; [
             stdenv.cc.cc
-            nodejs_21
+            nodejs_latest
             yarn
           ];
           LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath buildInputs}:$LD_LIBRARY_PATH";
