@@ -1,0 +1,55 @@
+{
+  "name": "world-primary smoke",
+  "init": {
+    "environment": "development",
+    "users": {
+      "0": {
+        "anonymizedId": "0",
+        "name": "Traveller",
+        "isRemoved": false,
+        "chatProfile": ""
+      }
+    },
+    "characters": {
+      "1": {
+        "anonymizedId": "1",
+        "name": "Elder Mira",
+        "isRemoved": false,
+        "description": "A silver-haired woman who watches the village square from a stone bench.",
+        "personality": "Measured. Warm when she chooses to be. Does not waste words.",
+        "first_message": "She doesn't look up. \"You've arrived, then,\" she says.",
+        "scenario": "The village square of a small settlement.",
+        "example_dialogs": "",
+        "tavern_personality": "",
+        "system_prompt": "",
+        "post_history_instructions": "",
+        "alternate_greetings": [],
+        "partial_extensions": {}
+      }
+    },
+    "config": null,
+    "messageState": null,
+    "chatState": null,
+    "initState": null
+  },
+  "steps": [
+    {
+      "type": "before",
+      "message": {
+        "anonymizedId": "0",
+        "content": "Hello, Elder Mira.",
+        "isBot": false,
+        "promptForId": "1",
+        "identity": "12345",
+        "isMain": true
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "domContains",
+      "selector": "div",
+      "when": "end"
+    }
+  ]
+}
