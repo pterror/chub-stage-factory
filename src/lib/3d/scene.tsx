@@ -1,3 +1,4 @@
+// @experimental — used by 0-1 callers; API may change.
 import {
   CSSProperties,
   ReactElement,

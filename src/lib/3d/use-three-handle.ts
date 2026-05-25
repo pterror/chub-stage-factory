@@ -1,3 +1,4 @@
+// @experimental — used by 0-1 callers; API may change.
 import {Ref, useImperativeHandle} from "react";
 import {useThree} from "@react-three/fiber";
 import {PerspectiveCamera as PerspectiveCameraImpl} from "three";
