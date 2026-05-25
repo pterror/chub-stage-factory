@@ -165,7 +165,8 @@ export async function freeformPipeline<D>(
       schema: opts.oracleSchema,
       retries: opts.oracleRetries ?? 2,
     });
-  } catch {
+  } catch (err) {
+    console.error("[freeform-pipeline] oracle call failed:", err);
     return { prose: "", intent: null, policyOutcome: "error" };
   }
 

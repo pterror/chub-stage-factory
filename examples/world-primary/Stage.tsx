@@ -475,6 +475,7 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
 
       newProse = result.prose;
     } catch (err) {
+      console.error("[world-primary] action processing failed:", err);
       newProse = "(Something went wrong processing your action.)";
     }
 
