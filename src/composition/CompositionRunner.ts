@@ -1,5 +1,5 @@
 import { ReactElement } from "react";
-import { StageBase, InitialData } from "@chub-ai/stages-ts";
+import { StageBase, InitialData, StageResponse } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { getExample } from "../../examples/registry";
 import type { DelegatorConfigComposed, LayoutKind } from "./types";
@@ -114,7 +114,13 @@ export class CompositionRunner {
 
   async setState(state: any): Promise<void> {
     for (const id of this.instanceIds) {
-      const resolved = state?.[id] ?? this.lastMessageState[id] ?? null;
+      // If state is null/undefined entirely, treat all keys as absent (use cache).
+      // If state is an object, use `id in state` to distinguish present-but-null
+      // (explicit reset) from absent (fall back to cache).
+      const resolved =
+        state != null && typeof state === "object" && id in state
+          ? state[id]
+          : this.lastMessageState[id] ?? null;
       await this.children.get(id)!.setState(resolved);
     }
   }
@@ -128,18 +134,18 @@ export class CompositionRunner {
     let pipedMessage = msg;
     let lastModifiedMessage: string | null = null;
     for (const id of this.instanceIds) {
-      const childResp = await this.children.get(id)!.beforePrompt(pipedMessage);
+      const childResp: Partial<StageResponse<any, any>> = await this.children.get(id)!.beforePrompt(pipedMessage);
       acc = mergeComposedResponses(acc, id, childResp);
       // Update per-instance state caches.
-      if ((childResp as any)?.messageState !== undefined) {
-        this.lastMessageState[id] = (childResp as any).messageState;
+      if (childResp?.messageState !== undefined) {
+        this.lastMessageState[id] = childResp.messageState;
       }
-      if ((childResp as any)?.chatState !== undefined) {
-        this.lastChatState[id] = (childResp as any).chatState;
+      if (childResp?.chatState !== undefined) {
+        this.lastChatState[id] = childResp.chatState;
       }
       // Thread modifiedMessage forward.
-      if ((childResp as any)?.modifiedMessage != null) {
-        lastModifiedMessage = (childResp as any).modifiedMessage;
+      if (childResp?.modifiedMessage != null) {
+        lastModifiedMessage = childResp.modifiedMessage;
         pipedMessage = { ...pipedMessage, content: lastModifiedMessage as string };
       }
     }
@@ -155,18 +161,18 @@ export class CompositionRunner {
     let pipedMessage = msg;
     let lastModifiedMessage: string | null = null;
     for (const id of this.instanceIds) {
-      const childResp = await this.children.get(id)!.afterResponse(pipedMessage);
+      const childResp: Partial<StageResponse<any, any>> = await this.children.get(id)!.afterResponse(pipedMessage);
       acc = mergeComposedResponses(acc, id, childResp);
       // Update per-instance state caches.
-      if ((childResp as any)?.messageState !== undefined) {
-        this.lastMessageState[id] = (childResp as any).messageState;
+      if (childResp?.messageState !== undefined) {
+        this.lastMessageState[id] = childResp.messageState;
       }
-      if ((childResp as any)?.chatState !== undefined) {
-        this.lastChatState[id] = (childResp as any).chatState;
+      if (childResp?.chatState !== undefined) {
+        this.lastChatState[id] = childResp.chatState;
       }
       // Thread modifiedMessage forward.
-      if ((childResp as any)?.modifiedMessage != null) {
-        lastModifiedMessage = (childResp as any).modifiedMessage;
+      if (childResp?.modifiedMessage != null) {
+        lastModifiedMessage = childResp.modifiedMessage;
         pipedMessage = { ...pipedMessage, content: lastModifiedMessage as string };
       }
     }

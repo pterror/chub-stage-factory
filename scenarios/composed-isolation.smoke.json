@@ -58,22 +58,38 @@
         "identity": "12346",
         "isMain": true
       }
+    },
+    {
+      "type": "set",
+      "state": { "a1": null },
+      "_comment": "Partial setState: a1 is present-but-null (explicit reset), a2 is absent (should use cache)"
+    },
+    {
+      "type": "before",
+      "message": {
+        "anonymizedId": "0",
+        "content": "third",
+        "isBot": false,
+        "promptForId": "1",
+        "identity": "12347",
+        "isMain": true
+      }
     }
   ],
   "assertions": [
     {
       "kind": "messageState",
       "path": "a1.count",
-      "expected": 2,
+      "expected": 3,
       "when": "end",
-      "description": "instance a1 count increments independently"
+      "description": "instance a1 count increments independently across all 3 before steps"
     },
     {
       "kind": "messageState",
       "path": "a2.count",
-      "expected": 2,
+      "expected": 3,
       "when": "end",
-      "description": "instance a2 count increments independently"
+      "description": "instance a2 count increments independently; absent from setState blob so cache was used"
     },
     {
       "kind": "messageState",
@@ -92,9 +108,9 @@
     {
       "kind": "messageState",
       "path": "a2.lastContent",
-      "expected": "[a1:2] world",
+      "expected": "[a1:3] third",
       "when": "end",
-      "description": "a2 sees a1's modifiedMessage (pipeline: a1 prefixes, a2 receives that as content)"
+      "description": "a2 sees a1's modifiedMessage from the third step (pipeline: a1 prefixes, a2 receives that)"
     }
   ]
 }
