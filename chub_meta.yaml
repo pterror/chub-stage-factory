@@ -1,6 +1,6 @@
 project_name: "Chub Stage Factory — configurable demo delegator"
-tagline: "Configurable demo stage — pick any registered example per deployment."
-creator_notes: "Top-level delegator stage for chub-stage-factory. Instantiates and forwards to the selected example StageBase. One Chub deployment, one stage ID, per-use-configurable across all registered examples."
+tagline: "Configurable demo stage — pick any registered example per deployment, or compose multiple stages side-by-side."
+creator_notes: "Top-level delegator stage for chub-stage-factory. Instantiates and forwards to the selected example StageBase. One Chub deployment, one stage ID, per-use-configurable across all registered examples. Composed mode (layout: tabs|stack) runs multiple example stages concurrently in one deployment."
 visibility: 'UNLISTED'
 position: 'FULLSCREEN'
 tags:
@@ -25,7 +25,20 @@ config_schema:
         - realtime-combat
         - composite-showcase
       default: world-primary
-      description: "Which example stage to run."
+      description: "Which example stage to run. Ignored when layout is tabs or stack."
+    composed_instances:
+      type: array
+      items: { type: string }
+      description: "Composed mode: list of '<example>:<id>' entries. When non-empty, this delegator runs multiple example stages concurrently and 'stage' is ignored."
+    layout:
+      type: string
+      enum: [single, tabs, stack]
+      default: single
+      description: "single = use 'stage' field; tabs/stack = composed mode with chosen panel layout."
+    hook_order:
+      type: array
+      items: { type: string }
+      description: "Optional ordering of instance ids for sequential lifecycle dispatch."
 
 state_schema:
   init:

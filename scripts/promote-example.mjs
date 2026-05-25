@@ -164,7 +164,10 @@ console.log("[promote] removed out/examples/");
 
 del(join(out, "src", "ExamplePicker.tsx"));
 del(join(out, "src", "TestRunner.tsx"));
-console.log("[promote] removed ExamplePicker.tsx, TestRunner.tsx");
+del(join(out, "src", "composition"));
+del(join(out, "src", "lib", "ui", "CompositionLayout.tsx"));
+del(join(out, "src", "lib", "design", "COMPOSITION.md"));
+console.log("[promote] removed ExamplePicker.tsx, TestRunner.tsx, composition/, composition-only lib files");
 
 // ---------------------------------------------------------------------------
 // 5. Rewrite out/src/App.tsx — drop dev branching, just the single stage

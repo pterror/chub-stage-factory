@@ -2,22 +2,27 @@ import {ReactElement} from "react";
 import {StageBase, StageResponse, InitialData, Message} from "@chub-ai/stages-ts";
 import {LoadResponse} from "@chub-ai/stages-ts/dist/types/load";
 import {getExample} from "../examples/registry";
+import type {ExampleName} from "../examples/registry";
+import type {DelegatorConfigComposed} from "./composition/types";
+import {parseComposedInstances} from "./composition/types";
+import {CompositionRunner} from "./composition/CompositionRunner";
 
 /***
  DelegatorConfig — discriminated union over registered example names.
- Phase 1: single `stage` field selects the example to delegate to.
- Phase 3 will introduce a `kind` discriminator for composite modes.
+ Single variant: { stage: ExampleName } selects one example to delegate to.
+ Composed variant: carries instances, layout, and optional hookOrder.
+ Phase 3: composed variant introduced; single-stage chats remain valid.
  ***/
-export type DelegatorConfig =
-  | { stage: "world-primary" }
-  | { stage: "inventory" }
-  | { stage: "effects" }
-  | { stage: "turn-combat" }
-  | { stage: "tits-body" }
-  | { stage: "cyber-slots" }
-  | { stage: "physics" }
-  | { stage: "realtime-combat" }
-  | { stage: "composite-showcase" };
+export type DelegatorConfigSingle = { stage: ExampleName };
+export type DelegatorConfig = DelegatorConfigSingle | DelegatorConfigComposed;
+
+/** Raw config shape as Chub hands it in from config_schema YAML fields. */
+interface RawChubConfig {
+  stage?: string;
+  composed_instances?: string[];
+  layout?: string;
+  hook_order?: string[];
+}
 
 /***
  Top-level delegator stage.
@@ -27,35 +32,67 @@ export type DelegatorConfig =
  ***/
 export class Stage extends StageBase<any, any, any, DelegatorConfig> {
 
-    inner: StageBase<any, any, any, any>;
+    inner?: StageBase<any, any, any, any>;
+    runner?: CompositionRunner;
 
     constructor(data: InitialData<any, any, any, DelegatorConfig>) {
         super(data);
-        const stageName = (data.config?.stage ?? "world-primary") as string;
-        const entry = getExample(stageName) ?? (() => {
-            console.warn(`[delegator] unknown stage "${stageName}", falling back to world-primary`);
-            return getExample("world-primary")!;
-        })();
-        this.inner = entry.factory(data);
+        const raw = data.config as RawChubConfig | null;
+
+        // Detect composed mode: layout is tabs|stack OR composed_instances is non-empty
+        const isComposed =
+          (raw?.layout === "tabs" || raw?.layout === "stack") ||
+          (Array.isArray(raw?.composed_instances) && (raw!.composed_instances!.length > 0));
+
+        if (isComposed) {
+            const instances = parseComposedInstances(raw?.composed_instances ?? []);
+            const layout = (raw?.layout === "tabs" || raw?.layout === "stack")
+                ? raw!.layout as "tabs" | "stack"
+                : "stack";
+            const composedConfig: DelegatorConfigComposed = {
+                kind: "composed",
+                instances,
+                layout,
+                hookOrder: raw?.hook_order,
+            };
+            const composedData: InitialData<any, any, any, DelegatorConfigComposed> = {
+                ...data,
+                config: composedConfig,
+            };
+            this.runner = new CompositionRunner(composedData);
+        } else {
+            // Single-stage path — unchanged from Phase 1/2
+            const stageName = (raw?.stage ?? "world-primary") as string;
+            const entry = getExample(stageName) ?? (() => {
+                console.warn(`[delegator] unknown stage "${stageName}", falling back to world-primary`);
+                return getExample("world-primary")!;
+            })();
+            this.inner = entry.factory(data);
+        }
     }
 
     async load(): Promise<Partial<LoadResponse<any, any, any>>> {
-        return this.inner.load();
+        if (this.runner) return this.runner.load();
+        return this.inner!.load();
     }
 
     async setState(state: any): Promise<void> {
-        return this.inner.setState(state);
+        if (this.runner) return this.runner.setState(state);
+        return this.inner!.setState(state);
     }
 
     async beforePrompt(userMessage: Message): Promise<Partial<StageResponse<any, any>>> {
-        return this.inner.beforePrompt(userMessage);
+        if (this.runner) return this.runner.beforePrompt(userMessage);
+        return this.inner!.beforePrompt(userMessage);
     }
 
     async afterResponse(botMessage: Message): Promise<Partial<StageResponse<any, any>>> {
-        return this.inner.afterResponse(botMessage);
+        if (this.runner) return this.runner.afterResponse(botMessage);
+        return this.inner!.afterResponse(botMessage);
     }
 
     render(): ReactElement {
-        return this.inner.render();
+        if (this.runner) return this.runner.render();
+        return this.inner!.render();
     }
 }
