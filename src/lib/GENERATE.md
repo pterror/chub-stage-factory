@@ -48,9 +48,19 @@ Reason: response did not match expected schema (attempt N).
 Please try again, following the requested format exactly.
 ```
 
-After `retries` exhausted, throws. Stage code wraps with try/catch
-and decides whether to placeholder, retry later, or surface the
-failure.
+After `retries` exhausted, **throws** `Error("generate: schema validation
+failed after N attempts (lastError)")`. It does **not** return null.
+
+Callers who want null-on-failure semantics must wrap with try/catch:
+
+```ts
+let def: Cyberware | null = null;
+try {
+  def = await generate<Cyberware>({ prompt, generator, schema, retries: 3 });
+} catch {
+  // retries exhausted — use placeholder or skip
+}
+```
 
 ## Cache by key
 
