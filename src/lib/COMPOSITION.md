@@ -89,6 +89,28 @@ Tests for every pattern source file:
 
 When the temptation arises to bake logic into a pattern, the right move is always: extract a primitive, then the pattern composes it.
 
+## CompositionRunner runtime contract
+
+The following invariants hold for stages managed by `CompositionRunner`:
+
+### State namespacing
+
+All per-child state (`messageState`, `chatState`, `initState`) is namespaced by the instance `id` declared in `DelegatorConfigComposed.instances`. A child whose id is `"inv"` receives and returns state under the key `"inv"` in the composed maps. Children never see each other's state; they operate as if they are the only stage.
+
+### `modifiedMessage` pipelining
+
+`modifiedMessage` threads sequentially through `hookOrder`. In `beforePrompt` and `afterResponse`, child stages run one after another; if child N returns a non-null `modifiedMessage`, child N+1 receives that value as `msg.content` rather than the original. The final `modifiedMessage` returned to Chub is whatever fell out of the last child in the chain (or null if no child set it). There is no last-writer-wins merge; the fold for `modifiedMessage` is entirely managed by the caller, not by `mergeComposedResponses`.
+
+### `load()` concurrency
+
+All children's `load()` calls run concurrently via `Promise.all`. A child must not depend on a sibling's `load()` having completed before its own; sibling-order guarantees exist only within `beforePrompt` and `afterResponse` (which run sequentially in `hookOrder`).
+
+### `initState` immutability
+
+`initState` is set once by `load()` and is not updated by per-turn responses (`beforePrompt` / `afterResponse`). This matches the Chub spec: `initState` is session-global and cannot be overwritten mid-chat. Only `messageState` and `chatState` change per turn.
+
+---
+
 ## Status
 
 This positioning is current as of 2026-05-23; the patterns layer (`src/lib/patterns/`) is not yet implemented. Adoption plan tracked in repository `TODO.md`.

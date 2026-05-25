@@ -4,7 +4,7 @@ import type { StageResponse } from "@chub-ai/stages-ts";
  * Merge a child StageResponse into an accumulator, namespacing per-id state.
  *
  * - stageDirections / systemMessage: concatenated with \n when both non-empty.
- * - modifiedMessage: last non-null wins; warns when overwriting a prior non-null value.
+ * - modifiedMessage: NOT handled here — threaded by the caller sequentially.
  * - messageState / chatState: namespaced by id key.
  * - error: first non-null wins.
  */
@@ -29,15 +29,7 @@ export function mergeComposedResponses(
       : childResp.systemMessage;
   }
 
-  // modifiedMessage — last non-null wins
-  if (childResp.modifiedMessage != null) {
-    if (acc.modifiedMessage != null) {
-      console.warn(
-        `[composition] modifiedMessage already set by an earlier instance; overwriting with value from "${id}".`,
-      );
-    }
-    out.modifiedMessage = childResp.modifiedMessage;
-  }
+  // modifiedMessage — managed by caller; not folded here.
 
   // error — first non-null wins
   if (childResp.error != null && acc.error == null) {

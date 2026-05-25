@@ -18,6 +18,9 @@ export class CompositionRunner {
   instanceIds: string[];
   layout: LayoutKind;
 
+  private lastMessageState: Record<string, any> = {};
+  private lastChatState: Record<string, any> = {};
+
   constructor(data: InitialData<any, any, any, DelegatorConfigComposed>) {
     const cfg = data.config!;
     this.layout = cfg.layout;
@@ -60,7 +63,7 @@ export class CompositionRunner {
       }
       const projected: InitialData<any, any, any, any> = {
         ...data,
-        config: null,
+        config: { instanceId: inst.id },
         messageState: (data.messageState as any)?.[inst.id] ?? null,
         chatState: (data.chatState as any)?.[inst.id] ?? null,
         initState: (data.initState as any)?.[inst.id] ?? null,
@@ -96,6 +99,10 @@ export class CompositionRunner {
       }
     }
 
+    // Populate caches with load() results.
+    this.lastMessageState = { ...messageState };
+    this.lastChatState = { ...chatState };
+
     return {
       success,
       error,
@@ -107,30 +114,63 @@ export class CompositionRunner {
 
   async setState(state: any): Promise<void> {
     for (const id of this.instanceIds) {
-      await this.children.get(id)!.setState(state?.[id] ?? null);
+      const resolved = state?.[id] ?? this.lastMessageState[id] ?? null;
+      await this.children.get(id)!.setState(resolved);
     }
   }
 
   async beforePrompt(
     msg: Parameters<StageBase<any, any, any, any>["beforePrompt"]>[0],
   ): Promise<ReturnType<StageBase<any, any, any, any>["beforePrompt"]>> {
-    let acc: ReturnType<StageBase<any, any, any, any>["beforePrompt"]> extends Promise<infer R> ? R : never = {};
+    type Resp = ReturnType<StageBase<any, any, any, any>["beforePrompt"]> extends Promise<infer R> ? R : never;
+    let acc: Resp = {};
+    // Pipeline: each child sees the previous child's modifiedMessage (if non-null).
+    let pipedMessage = msg;
+    let lastModifiedMessage: string | null = null;
     for (const id of this.instanceIds) {
-      const childResp = await this.children.get(id)!.beforePrompt(msg);
+      const childResp = await this.children.get(id)!.beforePrompt(pipedMessage);
       acc = mergeComposedResponses(acc, id, childResp);
+      // Update per-instance state caches.
+      if ((childResp as any)?.messageState !== undefined) {
+        this.lastMessageState[id] = (childResp as any).messageState;
+      }
+      if ((childResp as any)?.chatState !== undefined) {
+        this.lastChatState[id] = (childResp as any).chatState;
+      }
+      // Thread modifiedMessage forward.
+      if ((childResp as any)?.modifiedMessage != null) {
+        lastModifiedMessage = (childResp as any).modifiedMessage;
+        pipedMessage = { ...pipedMessage, content: lastModifiedMessage as string };
+      }
     }
-    return acc;
+    return { ...acc, modifiedMessage: lastModifiedMessage };
   }
 
   async afterResponse(
     msg: Parameters<StageBase<any, any, any, any>["afterResponse"]>[0],
   ): Promise<ReturnType<StageBase<any, any, any, any>["afterResponse"]>> {
-    let acc: ReturnType<StageBase<any, any, any, any>["afterResponse"]> extends Promise<infer R> ? R : never = {};
+    type Resp = ReturnType<StageBase<any, any, any, any>["afterResponse"]> extends Promise<infer R> ? R : never;
+    let acc: Resp = {};
+    // Pipeline: each child sees the previous child's modifiedMessage (if non-null).
+    let pipedMessage = msg;
+    let lastModifiedMessage: string | null = null;
     for (const id of this.instanceIds) {
-      const childResp = await this.children.get(id)!.afterResponse(msg);
+      const childResp = await this.children.get(id)!.afterResponse(pipedMessage);
       acc = mergeComposedResponses(acc, id, childResp);
+      // Update per-instance state caches.
+      if ((childResp as any)?.messageState !== undefined) {
+        this.lastMessageState[id] = (childResp as any).messageState;
+      }
+      if ((childResp as any)?.chatState !== undefined) {
+        this.lastChatState[id] = (childResp as any).chatState;
+      }
+      // Thread modifiedMessage forward.
+      if ((childResp as any)?.modifiedMessage != null) {
+        lastModifiedMessage = (childResp as any).modifiedMessage;
+        pipedMessage = { ...pipedMessage, content: lastModifiedMessage as string };
+      }
     }
-    return acc;
+    return { ...acc, modifiedMessage: lastModifiedMessage };
   }
 
   render(): ReactElement {

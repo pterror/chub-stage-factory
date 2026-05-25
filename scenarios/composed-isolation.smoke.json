@@ -1,0 +1,100 @@
+{
+  "name": "composed-isolation smoke",
+  "delegator": true,
+  "init": {
+    "environment": "development",
+    "users": {
+      "0": {
+        "anonymizedId": "0",
+        "name": "Tester",
+        "isRemoved": false,
+        "chatProfile": ""
+      }
+    },
+    "characters": {
+      "1": {
+        "anonymizedId": "1",
+        "name": "Bot",
+        "isRemoved": false,
+        "description": "Test bot.",
+        "personality": "",
+        "first_message": "Hello.",
+        "scenario": "",
+        "example_dialogs": "",
+        "tavern_personality": "",
+        "system_prompt": "",
+        "post_history_instructions": "",
+        "alternate_greetings": [],
+        "partial_extensions": {}
+      }
+    },
+    "config": {
+      "layout": "stack",
+      "composed_instances": ["_test-counter:a1", "_test-counter:a2"]
+    },
+    "messageState": null,
+    "chatState": null,
+    "initState": null
+  },
+  "steps": [
+    {
+      "type": "before",
+      "message": {
+        "anonymizedId": "0",
+        "content": "hello",
+        "isBot": false,
+        "promptForId": "1",
+        "identity": "12345",
+        "isMain": true
+      }
+    },
+    {
+      "type": "before",
+      "message": {
+        "anonymizedId": "0",
+        "content": "world",
+        "isBot": false,
+        "promptForId": "1",
+        "identity": "12346",
+        "isMain": true
+      }
+    }
+  ],
+  "assertions": [
+    {
+      "kind": "messageState",
+      "path": "a1.count",
+      "expected": 2,
+      "when": "end",
+      "description": "instance a1 count increments independently"
+    },
+    {
+      "kind": "messageState",
+      "path": "a2.count",
+      "expected": 2,
+      "when": "end",
+      "description": "instance a2 count increments independently"
+    },
+    {
+      "kind": "messageState",
+      "path": "a1.instanceId",
+      "expected": "a1",
+      "when": "end",
+      "description": "a1 state is namespaced under a1"
+    },
+    {
+      "kind": "messageState",
+      "path": "a2.instanceId",
+      "expected": "a2",
+      "when": "end",
+      "description": "a2 state is namespaced under a2"
+    },
+    {
+      "kind": "messageState",
+      "path": "a2.lastContent",
+      "expected": "[a1:2] world",
+      "when": "end",
+      "description": "a2 sees a1's modifiedMessage (pipeline: a1 prefixes, a2 receives that as content)"
+    }
+  ]
+}

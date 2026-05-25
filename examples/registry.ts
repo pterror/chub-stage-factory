@@ -29,6 +29,8 @@ import { CompositeShowcaseStage } from "./composite-showcase/Stage";
 import compositeInit from "./composite-showcase/test-init.json";
 import { WorldPrimaryStage } from "./world-primary/Stage";
 import worldPrimaryInit from "./world-primary/test-init.json";
+import { TestCounterStage } from "./_test-counter/Stage";
+import testCounterInit from "./_test-counter/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -122,6 +124,14 @@ export const EXAMPLES: ExampleEntry[] = [
     ],
     factory: (d) => new WorldPrimaryStage(d),
     testInit: worldPrimaryInit,
+  },
+  {
+    name: "_test-counter",
+    label: "_test-counter — minimal pipeline test stage (internal)",
+    description: "Increments count on each beforePrompt and sets modifiedMessage. Used by composed-isolation smoke test.",
+    primitives: [],
+    factory: (d) => new TestCounterStage(d),
+    testInit: testCounterInit,
   },
 ];
 

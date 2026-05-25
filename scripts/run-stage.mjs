@@ -44,6 +44,7 @@ const getFlag = (flag) => {
 const allMode = hasFlag("--all");
 const interactive = hasFlag("--interactive");
 const printHtml = hasFlag("--print-html");
+const delegatorMode = hasFlag("--delegator");
 const turnsArg = getFlag("--turns");
 const maxTurns = turnsArg ? parseInt(turnsArg, 10) : Infinity;
 
@@ -220,34 +221,38 @@ async function runScenario(scenarioPath, overrideExampleName) {
     return false;
   }
 
+  const isDelegate = delegatorMode || scenario.delegator === true;
   const targetExample = overrideExampleName ?? deriveExampleName(scenarioPath, scenario);
-  console.log(`[run-stage] example: ${targetExample}, scenario: ${scenario.name}`);
+  console.log(`[run-stage] example: ${targetExample}, scenario: ${scenario.name}${isDelegate ? " [delegator mode]" : ""}`);
 
   // Get factory from headless bundle
-  // The headless bundle exports from src/index.ts which re-exports Stage.
-  // For multi-example factory repos we need the registry.
-  // Try to import registry from source.
+  // When --delegator is set, import src/Stage.tsx (the top-level delegator).
+  // Otherwise, import examples/<name>/Stage.tsx directly.
   let factory;
   try {
-    const registryPath = resolve(repo, "examples", "registry.ts");
-    // We can't import .ts directly — use a transpiled approach:
-    // Instead, instantiate by looking at what headlessModule exports
-    // and matching by known exported class names.
-    // For the factory, we dynamically import examples/<name>/Stage.tsx
-    // via bun's transpiler support.
-    const exampleStagePath = resolve(repo, "examples", targetExample, "Stage.tsx");
-    if (!existsSync(exampleStagePath)) {
-      console.error(`[run-stage] no stage found at ${exampleStagePath}`);
-      console.error(`[run-stage] valid examples: inventory, effects, turn-combat, tits-body, cyber-slots, physics, realtime-combat, composite-showcase, world-primary`);
-      return false;
+    let stagePath;
+    if (isDelegate) {
+      stagePath = resolve(repo, "src", "Stage.tsx");
+      if (!existsSync(stagePath)) {
+        console.error(`[run-stage] delegator Stage not found at ${stagePath}`);
+        return false;
+      }
+      console.log(`[run-stage] delegator mode: loading top-level Stage from ${stagePath}`);
+    } else {
+      stagePath = resolve(repo, "examples", targetExample, "Stage.tsx");
+      if (!existsSync(stagePath)) {
+        console.error(`[run-stage] no stage found at ${stagePath}`);
+        console.error(`[run-stage] valid examples: inventory, effects, turn-combat, tits-body, cyber-slots, physics, realtime-combat, composite-showcase, world-primary`);
+        return false;
+      }
     }
-    const exampleModule = await import(exampleStagePath);
-    // Find any exported class
-    const StageClass = Object.values(exampleModule).find(
+    const stageModule = await import(stagePath);
+    // Find any exported class with a load() method
+    const StageClass = Object.values(stageModule).find(
       (v) => typeof v === "function" && v.prototype && typeof v.prototype.load === "function"
     );
     if (!StageClass) {
-      console.error(`[run-stage] no StageBase subclass found in ${exampleStagePath}`);
+      console.error(`[run-stage] no StageBase subclass found in ${stagePath}`);
       return false;
     }
     factory = (data) => new StageClass(data);
