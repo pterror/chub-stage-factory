@@ -27,6 +27,12 @@ import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
   mergeResponses, shard, shardOf, withPersistence,
 } from "../../src/lib/persistence";
+import type {
+  StageIntrospect,
+  VerbDescriptor,
+  StageDescriptor,
+  InvocationResult,
+} from "../../src/lib/introspect";
 
 interface MessageStateType { ticks: number; lastTraj?: TrajectoryStep[]; [k: string]: unknown }
 type ChatStateType = null;
@@ -40,7 +46,7 @@ const OBSTACLES = [
   { name: "pillar",    aabb: { x: 170, y: 20, w: 12, h: 80 } },
 ];
 
-export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
+export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() implements StageIntrospect {
   phys = physicsPattern({ room: ROOM, obstacles: OBSTACLES, rngSeed: "mara-studio" });
   tick = { n: 0, lastTraj: undefined as TrajectoryStep[] | undefined };
   lastResult?: PhysicsSimResult;
@@ -93,26 +99,94 @@ export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, 
     return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
   }
 
-  /** Click-to-throw: player clicks a point in the atelier SVG; we launch
-   *  from centre with velocity toward the clicked point. Routes directly to
-   *  simulate() — the LLM narrates throws it emitted via <throw> only.
-   *
-   *  Primitive gap: no StageIntrospect invokeVerb("throw", {x,y,vx,vy}) yet.
-   *  A future wiring would let the LLM narrate click-throws too, and let
-   *  scripts/explore-stage.mjs drive this interaction from the CLI.
-   */
+  /** Click-to-throw: routes through invokeVerb so the LLM narrates the throw
+   *  and state is persisted via the normal lifecycle. */
   private handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = e.currentTarget;
     const rect = svg.getBoundingClientRect();
     const svgX = ((e.clientX - rect.left) / rect.width) * ROOM.w;
     const svgY = ((e.clientY - rect.top) / rect.height) * ROOM.h;
+    void this.invokeVerb("throw", { x: svgX, y: svgY });
+  };
+
+  /* ---------------- StageIntrospect ----------------
+   * availableVerbs / describe / invokeVerb — lets explore-stage.mjs and any
+   * UX layer drive the stage without reaching into internals.
+   * invokeVerb synthesises a Message and calls beforePrompt so LLM narration
+   * and state persistence happen on every click-throw, not just LLM-emitted
+   * <throw> tags.
+   * ------------------------------------------------- */
+
+  availableVerbs(): VerbDescriptor[] {
+    return [
+      {
+        name: "throw",
+        label: "Throw object",
+        description: "Launch an object from the atelier centre toward the target point (x, y).",
+        args: [
+          { name: "x", type: "number", required: true, description: "Target X in room coordinates (0–200)." },
+          { name: "y", type: "number", required: true, description: "Target Y in room coordinates (0–120)." },
+        ],
+        group: "action",
+      },
+    ];
+  }
+
+  describe(): StageDescriptor {
+    const last = this.lastResult;
+    const endpoint = last?.steps.at(-1);
+    const hits = last?.hit ?? [];
+    return {
+      summary:
+        `Mara's atelier (200×120). Tick ${this.tick.n}. ` +
+        (last
+          ? `Last throw: hit [${hits.join(", ") || "nothing"}]; ended at (${Math.round(endpoint?.x ?? 0)}, ${Math.round(endpoint?.y ?? 0)}).`
+          : "No throw yet."),
+      details: {
+        tick: this.tick.n,
+        lastHits: hits,
+        lastEndpoint: endpoint ? { x: endpoint.x, y: endpoint.y } : null,
+        obstacles: OBSTACLES.map((o) => o.name),
+      },
+      verbCount: 1,
+    };
+  }
+
+  async invokeVerb(name: string, args?: Record<string, unknown>): Promise<InvocationResult> {
+    if (name !== "throw") {
+      return { ok: false, error: `unknown verb "${name}"` };
+    }
+    const x = typeof args?.x === "number" ? args.x : null;
+    const y = typeof args?.y === "number" ? args.y : null;
+    if (x === null || y === null) {
+      return { ok: false, error: 'verb "throw" requires numeric args x and y' };
+    }
     const cx = ROOM.w / 2, cy = ROOM.h / 2;
-    const dx = svgX - cx, dy = svgY - cy;
+    const dx = x - cx, dy = y - cy;
     const speed = 80;
     const m = Math.hypot(dx, dy) || 1;
-    this.lastResult = this.phys.simulate(cx, cy, (dx / m) * speed, (dy / m) * speed);
-    this.tick.lastTraj = this.lastResult.steps;
-  };
+    const vx = (dx / m) * speed, vy = (dy / m) * speed;
+    const msg: Message = {
+      anonymizedId: "0",
+      content: `throw ${Math.round(x)},${Math.round(y)},${Math.round(vx)},${Math.round(vy)}`,
+      isBot: false,
+      promptForId: "1",
+      identity: "12345",
+      isMain: true,
+    };
+    try {
+      const resp = await this.beforePrompt(msg);
+      return {
+        ok: resp?.error == null,
+        message: msg.content,
+        error: resp?.error ?? undefined,
+        messageState: resp?.messageState,
+      };
+    } catch (err) {
+      const e = err as Error;
+      return { ok: false, error: `beforePrompt threw: ${e.message}` };
+    }
+  }
 
   render(): ReactElement {
     const last = this.lastResult;
