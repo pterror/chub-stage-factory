@@ -19,10 +19,9 @@
 
 import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { AttackDef, RealtimeWorld } from "../../src/lib/combat-realtime";
+import { AttackDef, RealtimeWorld, type RealtimeEvent } from "../../src/lib/combat-realtime";
 import { Rng } from "../../src/lib/rng";
 import { realtimeCombatPattern } from "../../src/lib/patterns/realtime-combat";
-import { summarize } from "../../src/lib/timeline";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations } from "../../src/lib/observation";
@@ -136,21 +135,94 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
     return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
   }
 
+  /** Click-to-shoot: player clicks a point in the arena SVG; we fire from
+   *  the player combatant toward that point. Routes through the existing
+   *  shoot() helper so the physics path is identical to LLM <shoot> tags.
+   *
+   *  Primitive gap: this bypasses beforePrompt/afterResponse — the shot fires
+   *  but the LLM is not prompted to narrate it. A StageIntrospect
+   *  invokeVerb("shoot", {dx,dy}) path would close this gap.
+   */
+  private handleArenaClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const clickX = ((e.clientX - rect.left) / rect.width) * ARENA.w;
+    const clickY = ((e.clientY - rect.top) / rect.height) * ARENA.h;
+    const you = this.combat.world.combatants.get("you");
+    if (!you) return;
+    const dx = clickX - you.pos.x;
+    const dy = clickY - you.pos.y;
+    this.shoot(dx, dy, this.tick.n);
+  };
+
+  private renderEventLine(e: RealtimeEvent): string | null {
+    switch (e.kind) {
+      case "attack_hit":    return `Hit! ${e.target} takes ${e.damage} dmg`;
+      case "downed":        return e.combatant === "you" ? "You go down." : "Drone destroyed.";
+      case "out-of-bounds": return "Shot flies wide.";
+      case "attack_spawned": return "Fired.";
+      default: return null;
+    }
+  }
+
   render(): ReactElement {
+    const you = this.combat.world.combatants.get("you");
+    const drones = [...this.combat.world.combatants.values()].filter((c) => c.team === "e" && c.hp > 0);
+    const recentEvents = this.combat.events.all().slice(-6)
+      .map(({ payload }) => this.renderEventLine(payload))
+      .filter((l): l is string => l !== null);
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Arena — tick {this.tick.n} — HP {this.tick.hp}</h3>
-        <svg width={480} height={320} viewBox={`0 0 ${ARENA.w} ${ARENA.h}`} style={{ background: "#1a1a22", border: "1px solid #444" }}>
-          {[...this.combat.world.combatants.values()].map((c) => (
-            <circle key={c.id} cx={c.pos.x} cy={c.pos.y} r={c.radius} fill={c.team === "p" ? "#7df" : c.hp > 0 ? "#f77" : "#444"} />
-          ))}
-          {this.combat.world.attacks.map((a) => a.bounds.circle && (
-            <circle key={a.id} cx={a.bounds.circle.x} cy={a.bounds.circle.y} r={a.bounds.circle.r} fill="#ff8" />
-          ))}
-        </svg>
-        <pre style={{ background: "#000", padding: 8, marginTop: 8, maxHeight: 160, overflow: "auto" }}>
-{summarize(this.combat.events.all(), (e) => JSON.stringify(e)) || "—"}
-        </pre>
+      <div style={{ padding: 12, fontFamily: "system-ui, sans-serif", color: "#e8e8e8", background: "#111", maxWidth: 520 }}>
+        {/* Header — HP bar */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+          <span style={{ fontSize: "0.9rem", color: "#9ad", fontWeight: 600 }}>Arena</span>
+          <div style={{ flex: 1, height: 6, background: "#333", borderRadius: 3, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${Math.max(0, (this.tick.hp / 30) * 100)}%`, background: this.tick.hp > 15 ? "#5c9" : this.tick.hp > 8 ? "#da7" : "#d44", transition: "width 0.2s" }} />
+          </div>
+          <span style={{ fontSize: "0.8rem", color: this.tick.hp > 15 ? "#7c9" : "#e77", minWidth: 50 }}>HP {this.tick.hp}/30</span>
+          <span style={{ fontSize: "0.75rem", color: "#555" }}>{drones.length} drone{drones.length !== 1 ? "s" : ""}</span>
+        </div>
+
+        {/* Interactive arena */}
+        <div style={{ position: "relative", marginBottom: 8 }}>
+          <svg
+            width={480} height={320} viewBox={`0 0 ${ARENA.w} ${ARENA.h}`}
+            style={{ background: "#0e0e16", border: "1px solid #333", borderRadius: 4, cursor: "crosshair", display: "block" }}
+            onClick={this.handleArenaClick}
+          >
+            <rect x={1} y={1} width={ARENA.w - 2} height={ARENA.h - 2} fill="none" stroke="#223" strokeWidth={2} />
+            {[...this.combat.world.combatants.values()].map((c) =>
+              c.team === "e" ? (
+                <g key={c.id}>
+                  <circle cx={c.pos.x} cy={c.pos.y} r={c.radius + 3} fill="none" stroke={c.hp > 0 ? "#f774" : "#0000"} strokeWidth={1} />
+                  <circle cx={c.pos.x} cy={c.pos.y} r={c.radius} fill={c.hp > 0 ? "#c44" : "#2a2"} />
+                </g>
+              ) : (
+                <g key={c.id}>
+                  <circle cx={c.pos.x} cy={c.pos.y} r={c.radius + 4} fill="none" stroke="#5af4" strokeWidth={1} />
+                  <circle cx={c.pos.x} cy={c.pos.y} r={c.radius} fill="#4af" />
+                </g>
+              )
+            )}
+            {this.combat.world.attacks.map((a) => a.bounds.circle && (
+              <circle key={a.id} cx={a.bounds.circle.x} cy={a.bounds.circle.y} r={a.bounds.circle.r} fill="#ff8" opacity={0.9} />
+            ))}
+            {you && (
+              <text x={you.pos.x} y={you.pos.y - 10} textAnchor="middle" fill="#7af" fontSize={6}>you</text>
+            )}
+          </svg>
+          <div style={{ position: "absolute", bottom: 6, right: 8, color: "#444", fontSize: "0.7rem", pointerEvents: "none" }}>
+            click to shoot
+          </div>
+        </div>
+
+        {/* Event feed — prose not JSON */}
+        {recentEvents.length > 0 && (
+          <div style={{ background: "#0a0a0a", border: "1px solid #222", borderRadius: 4, padding: "6px 10px", fontSize: "0.8rem", color: "#bbb", maxHeight: 90, overflowY: "auto" }}>
+            {recentEvents.map((line, i) => <div key={i}>{line}</div>)}
+          </div>
+        )}
       </div>
     );
   }
