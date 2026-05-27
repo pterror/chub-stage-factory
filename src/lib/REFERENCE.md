@@ -4,7 +4,7 @@ Terse API catalog. One line per exported symbol. Module ordering is bottom-up
 (foundational first). Read `README.md` first for philosophy; this file is for
 lookup after you know what you're looking for.
 
-## `tags.ts`
+## `tags.ts` — [TAGS.md](./TAGS.md)
 
 - `parseTerm(term): { negate, tag }` — split `"!claw"` into `{ negate: true, tag: "claw" }`.
 - `class TagSet`
@@ -16,7 +16,7 @@ lookup after you know what you're looking for.
   - `matchesAny(query[])` — OR
   - `size()`, `toArray()`, `clone()`, `toJSON()`
 
-## `body.ts`
+## `body.ts` — [BODY.md](./BODY.md)
 
 - `interface TransformationInstance { id, slot, addTags, removeTags, startTime, duration?, source? }`
 - `interface PermanentPatch { slot, addTags?, removeTags? }`
@@ -33,7 +33,7 @@ lookup after you know what you're looking for.
   - `tick(now): TransformationInstance[]` — returns expired
   - `toJSON()`, `static fromJSON(data)`
 
-## `transformation.ts`
+## `transformation.ts` — [TRANSFORMATION.md](./TRANSFORMATION.md)
 
 - `type RelationKind = string`
 - `interface TrajectoryStep { addTags, removeTags }`
@@ -48,7 +48,7 @@ lookup after you know what you're looking for.
 - `applyTrajectories(body, now)` — rewrite instance tags via def.trajectory
 - `fromDict(data): TransformationDef`
 
-## `equipment.ts`
+## `equipment.ts` — [EQUIPMENT.md](./EQUIPMENT.md)
 
 - `type OnConflict = "unequip" | "degrade" | "adapt" | "destroy" | "prompt" | "custom"`
 - `interface EquipmentDef { id, slot, constraints, onConflict, degradePenalties?, adaptAlternatives?, grantsTags?, displayName?, description? }`
@@ -61,7 +61,7 @@ lookup after you know what you're looking for.
 - `class Loadout { constructor(body); equip(def, now); unequip(slot); getEquipped(slot); getAllEquipped(); checkAllConstraints(); fit(slot); resolveViolations(); toJSON(); static fromJSON(data, body, defs) }`
 - `fromDict(data): EquipmentDef`
 
-## `constraints.ts`
+## `constraints.ts` — [CONSTRAINTS.md](./CONSTRAINTS.md)
 
 - `interface Violation { source, constraint, failedTerms, context? }`
 - `check(source, constraint, tags, context?): Violation | null`
@@ -75,7 +75,7 @@ lookup after you know what you're looking for.
 - `interface DiffResult { changed, slotsAdded, slotsRemoved, tagsAdded, tagsRemoved, tfsAdded, tfsRemoved }`
 - `class Snapshots { constructor(body); save(name); restore(name); has(name); delete(name); list(); clear(); get(name); set(name, data); diff(name); toJSON(); static fromJSON(data, body) }`
 
-## `rng.ts`
+## `rng.ts` — [RNG.md](./RNG.md)
 
 - `class RngStream { next(); float(); range(lo, hi); pick(arr); pickN(arr, n, replace?); weightedPick(items); dice(notation); shuffle(arr) }`
 - `class Rng { static fromSeed(seed); stream(name); mechanical; cosmetic; toJSON(); static fromJSON(data) }`
@@ -99,7 +99,7 @@ lookup after you know what you're looking for.
 - `randomId(rng, prefix?="id"): string`
 - `pickName(table, rng): string`
 
-## `stats.ts`
+## `stats.ts` — [STATS.md](./STATS.md)
 
 - `type ModifierKind = "flat" | "mult" | "add" | "habituation"`
 - `interface Modifier { id?, kind, value, source?, setpoint?, leakUp?, leakDown?, lastAppliedAt? }`
@@ -107,7 +107,7 @@ lookup after you know what you're looking for.
 - `thresholdTiers(bands, fallback): TierFn`
 - `class Stat<T> { constructor({ base, tiers?, modifiers? }); base; addModifier; removeModifier; clearModifiers; getModifiers; effective(now?); tier(now?); tick(now); toJSON() }`
 
-## `effects.ts`
+## `effects.ts` — [EFFECTS.md](./EFFECTS.md)
 
 - `type StackingPolicy = "replace" | "extend" | "stack" | "highest"`
 - `interface EffectMagnitudes { stats?, tagsAdd?, tagsRemove?, abilities? }`
@@ -115,14 +115,14 @@ lookup after you know what you're looking for.
 - `interface EffectInstance { id, def, startTime, count }`
 - `class EffectStore { apply(def, now); remove(id); dispelByTag(tag); active(); magnitudesFor(id, now); totalMagnitudes(now); tick(now); toJSON(); static fromJSON(data, defs) }`
 
-## `fsm.ts`
+## `fsm.ts` — [FSM.md](./FSM.md)
 
 - `interface TransitionObj<E> { to?, push?, pop?, emit? }`
 - `type Transition<E> = TransitionObj<E> | void`
 - `interface StateDef<C, E> { parent?, enter?, exit?, on? }`
 - `class Fsm<C, E> { constructor(initial, ctx, states?); ctx; defineState(name, def); current(); path(); stack(); dispatch(event, data?): E[]; reset(initial?); toJSON(); static fromJSON(data, ctx, states?) }`
 
-## `inventory.ts`
+## `inventory.ts` — [INVENTORY.md](./INVENTORY.md)
 
 - `type CarryClass = "fixed" | "explicit" | "habitual"`
 - `interface ItemDef { id, carryClass, portable, counted, defaultSpot?, channels?, size?, tags?, displayName?, description? }`
@@ -132,13 +132,13 @@ lookup after you know what you're looking for.
 - `interface SpotMeta { ..., weightCapacity?, bulkCapacity? }`
 - `class Inventory { register(def); getDef(id); ensureSpot(name, meta?); spots(); contents(spot); meta(spot); add(spot, defId, n=1); remove(spot, defId, n=1); move(from, to, defId, n=1); find(defId); touch(spot, now); accessibility(defId, spot, now); capacityOK(spot, itemDef, count=1): boolean; capacityViolation(spot, itemDef, count=1): {kind, overBy}|null; resolveLeaveLocation(stress, now, actorSpots, rng?); toJSON(); static fromJSON(data) }`
 
-## `grid-inventory.ts`
+## `grid-inventory.ts` — [GRID-INVENTORY.md](./GRID-INVENTORY.md)
 
 - `type Rot = 0 | 1 | 2 | 3`
 - `interface Placement { defId, x, y, rot, count }`
 - `class GridInventory { constructor(width, height); setShape(defId, shape); getShape(defId); rotated(shape, rot); placements(); canPlace(defId, x, y, rot, count?); place(p); remove(idx); occupancy(); toJSON(); static fromJSON(data) }`
 
-## `action.ts`
+## `action.ts` — [ACTION.md](./ACTION.md)
 
 - `interface ActionDef<A, T, W> { id, costs, range?, targetFilter?, effects, cooldown?, tags?, displayName?, description? }`
 - `interface ActorWithResources { resources?, cooldowns?, position? }`
@@ -147,7 +147,7 @@ lookup after you know what you're looking for.
 - `payCosts(actor, costs): boolean`
 - `markCooldown(actor, def, now)`, `isOnCooldown(actor, def, now)`
 
-## `combat-turn.ts`
+## `combat-turn.ts` — [COMBAT-TURN.md](./COMBAT-TURN.md)
 
 - `interface Combatant { id, initiative, hp, resources?, cooldowns?, position?, stats?, tags?, effects? }`
 - `interface AttackProfile { damage, type, crit?, accuracy?, critMultiplier? }`
@@ -159,7 +159,7 @@ lookup after you know what you're looking for.
 - `runTurn(actor, choose, world, now, rng): CombatEvent[]`
 - `runRound(combatants, choose, world, now, rng): CombatEvent[]`
 
-## `combat-realtime.ts`
+## `combat-realtime.ts` — [COMBAT-REALTIME.md](./COMBAT-REALTIME.md)
 
 - `interface RealtimeCombatant { id, pos, vel, radius, team?, hp, tags? }`
 - `interface AttackDef { id, shape, duration, pierces?, effects, hitFilter?, damage? }`
@@ -168,7 +168,7 @@ lookup after you know what you're looking for.
 - `interface ArenaBounds { minX, maxX, minY, maxY }`
 - `class RealtimeWorld { combatants; attacks; bounds?; constructor(cellSize=64, bounds?); add(c); spawnAttack(def, owner, initial, now); tick(dt, now): RealtimeEvent[]; toJSON(); static fromJSON(data) }` — combatants clamped, attacks outside bounds culled with `out-of-bounds` event; attacks are NOT serialized (transient, reference stage-side AttackDef objects)
 
-## `physics.ts`
+## `physics.ts` — [PHYSICS.md](./PHYSICS.md)
 
 - Types: `Vec2`, `AABB`, `Circle`, `Segment`
 - `aabbOverlap(a, b)`, `aabbContains(a, p)`, `circleOverlap(a, b)`, `circleAabbOverlap(c, a)`, `segmentAabb(s, a)`
@@ -177,7 +177,7 @@ lookup after you know what you're looking for.
 - `resolveImpulse(av, bv, normal, restitution?): { av, bv }`
 - `verletStep(p, prev, accel, dt, damping?): { p, prev }`
 
-## `observation.ts`
+## `observation.ts` — [OBSERVATION.md](./OBSERVATION.md)
 
 - `type Channel = string`, `type Key = string`, `type Evaluator<S, V>`
 - `interface ObservationSource<S> { id, channels, available?, salience, properties, habituationTau? }`
@@ -297,7 +297,7 @@ lookup after you know what you're looking for.
 - `systemInstructionsContributor(text, { id?, priority?=100, optional?=false })`
 - `turnInputContributor({ id?, priority?=90, optional?=false })`
 
-## `tag-parser.ts`
+## `tag-parser.ts` — [TAG-PARSER.md](./TAG-PARSER.md)
 
 - `type FieldKind = "string" | "int" | "float" | "bool" | "list"`
 - `interface FieldSpec { kind, required?, max?, enum?, default? }`
@@ -307,7 +307,7 @@ lookup after you know what you're looking for.
 - `parseTags(text, schema, opts?: { stripUnknown? }): ParseResult`
 - `parseTagsBatch(text, schemas[], opts?): ParseResult[]` — single pass; each schema strips from prior's output
 
-## `classifier.ts`
+## `classifier.ts` — [CLASSIFIER.md](./CLASSIFIER.md)
 
 - `interface Score { label, score }`
 - `type Classifier = (text, labels) => Promise<Score[]>`
