@@ -185,3 +185,18 @@ surfaced errors, disable rules only where the pattern is structural and judgment
   — dep arrays are deliberately incomplete (`addEntry` is stable by construction;
   `hoverConfig`/`entryConfig` wrapping in `useMemo` deferred to avoid changing animation
   behaviour in this pass).
+
+## N. `world-primary` not migrated to `world.ts` yet
+
+Wave 2B `world.ts` (graph of rooms + scope queries) was landed in 2026-05-27.
+`examples/world-primary/Stage.tsx` predates the primitive and hand-rolls every
+concept it captures: `LOCATIONS: Record<string, Location>` literal, manual
+scope-Set construction in `beforePrompt`, deterministic `intent.verb === "go"`
+movement logic, etc. Migrating cleanly requires reshaping how the example
+seeds its world and how `freeformPipeline`'s `applyDelta` mutates location —
+non-trivial enough to risk regressing the currently-green smoke scenario.
+
+Deferred. TODO: in a follow-up, replace the inline LOCATIONS/NPCS literals
+with `new World()` + `world.locate(…)`, pass `world.scope("player")` to
+`parseIntent`, and route `intent.verb === "go"` through `world.move`. The
+`worldResolvers(world)` helper is in place for that migration.
