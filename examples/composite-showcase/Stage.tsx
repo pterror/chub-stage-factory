@@ -454,48 +454,143 @@ export class CompositeShowcaseStage extends withPersistence<ChatStateType, InitS
     // is a best-effort nudge for the dev TestRunner.
   }
 
+  private renderCombatEvent(e: CombatEvent): string | null {
+    switch (e.kind) {
+      case "hit":    return `${e.actor === "pc" ? "You" : "Scav"} hit ${e.target === "pc" ? "you" : "scav"} for ${e.final}${e.crit ? " (crit!)" : ""}`;
+      case "missed": return `${e.actor === "pc" ? "Your" : "Scav's"} attack misses`;
+      case "dodged": return `${e.target === "pc" ? "You" : "Scav"} dodge${e.target === "pc" ? "" : "s"}`;
+      case "effect_applied": return `${e.effectId} applied to ${e.target === "pc" ? "you" : "scav"}`;
+      case "downed": return e.combatant === "pc" ? "You go down." : "Scav falls.";
+      default: return null;
+    }
+  }
+
   render(): ReactElement {
     const _ = this.rerender;
+    const now = this.tick.n;
+    const mode = this.tick.mode;
+
+    // Cyberware violations -> player prose (no raw JSON)
+    const violations = this.loadout.checkAllConstraints();
+    const violationLines = violations.map((v) => {
+      const mod = MODS.get(v.source);
+      const failed = v.failedTerms.map((t) => t.startsWith("!") ? `conflicts with ${t.slice(1)}` : `needs ${t}`).join("; ");
+      return `${mod?.displayName ?? v.source} — ${failed}`;
+    });
+
+    const equipped = [...this.loadout.getAllEquipped()];
+
+    const inventoryRows = this.inv.spots().map((spot) => ({
+      spot,
+      items: this.inv.contents(spot).map((st) => {
+        const def = this.inv.getDef(st.defId);
+        return `${def?.displayName ?? st.defId}${st.count > 1 ? ` ×${st.count}` : ""}`;
+      }),
+    }));
+
+    const combatLines = mode !== "shop"
+      ? summarize(this.events.window(30), (e) => this.renderCombatEvent(e) ?? "")
+          .split("\n").filter(Boolean).slice(-6)
+      : [];
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Maven&apos;s clinic — {this.tick.mode} — tick {this.tick.n}</h3>
-        <div style={{ marginBottom: 8 }}>
-          <button onClick={this.saveSlot} style={{ marginRight: 8 }}>Save Slot</button>
-          <button onClick={this.loadSlot}>Load Slot</button>
-          {this.slotMsg && <span style={{ marginLeft: 12, opacity: 0.7 }}>{this.slotMsg}</span>}
+      <div style={{ padding: 12, fontFamily: "system-ui, sans-serif", color: "#e8e8e8", background: "#111", maxWidth: 520 }}>
+        {/* Header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <span style={{ fontSize: "1rem", color: "#9ad", fontWeight: 600 }}>Maven&apos;s Clinic</span>
+          <span style={{ fontSize: "0.75rem", background: mode === "combat" ? "#2a1010" : mode === "ended" ? "#1a2a1a" : "#10182a", color: mode === "combat" ? "#e77" : mode === "ended" ? "#7c9" : "#7af", padding: "2px 8px", borderRadius: 10 }}>
+            {mode === "shop" ? "Open" : mode === "combat" ? "Combat" : "Ended"}
+          </span>
+          <div style={{ flex: 1 }} />
+          <button onClick={this.saveSlot} style={{ fontSize: "0.75rem", padding: "2px 8px", background: "#222", border: "1px solid #444", color: "#aaa", borderRadius: 4, cursor: "pointer" }}>Save</button>
+          <button onClick={this.loadSlot} style={{ fontSize: "0.75rem", padding: "2px 8px", background: "#222", border: "1px solid #444", color: "#aaa", borderRadius: 4, cursor: "pointer" }}>Load</button>
+          {this.slotMsg && <span style={{ fontSize: "0.7rem", color: "#666" }}>{this.slotMsg}</span>}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          {/* Left: body + cyberware */}
           <div>
-            <h4>Body</h4>
-            <table><tbody>
-              {this.body.getSlots().map((s) => (
-                <tr key={s}><td style={{ color: "#9ad", padding: "2px 8px" }}>{s}</td><td>{this.body.getEffectiveTags(s).toArray().join(", ") || "—"}</td></tr>
-              ))}
-            </tbody></table>
-            <h4>Equipped</h4>
-            <ul>{[...this.loadout.getAllEquipped()].map(([slot, inst]) => (
-              <li key={slot}>{inst.def.id} on {slot} — {this.loadout.fit(slot, this.tick.n)?.fit}</li>
-            ))}</ul>
-            <div style={{ fontSize: "0.85rem", opacity: 0.7 }}>last: {this.tick.lastAction ?? "—"}</div>
+            <div style={{ fontSize: "0.7rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Body</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 10 }}>
+              {this.body.getSlots().map((s) => {
+                const tags = this.body.getEffectiveTags(s).toArray();
+                const modded = tags.some((t) => t.includes("port") || t.includes("socket"));
+                return (
+                  <div key={s} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: "0.8rem" }}>
+                    <span style={{ color: "#9ad", minWidth: 40 }}>{s}</span>
+                    <span style={{ color: modded ? "#7c9" : "#555" }}>{modded ? tags.filter((t) => t.includes("port") || t.includes("socket")).join(", ") : "baseline"}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ fontSize: "0.7rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Installed</div>
+            {equipped.length === 0
+              ? <div style={{ color: "#555", fontSize: "0.8rem", fontStyle: "italic" }}>Nothing equipped</div>
+              : equipped.map(([slot, inst]) => {
+                const fit = this.loadout.fit(slot, now)?.fit;
+                const ok = fit === "comfortable";
+                return (
+                  <div key={slot} style={{ display: "flex", gap: 6, alignItems: "center", fontSize: "0.8rem", padding: "2px 0" }}>
+                    <span style={{ color: ok ? "#7c9" : "#e77" }}>{ok ? "◉" : "⚠"}</span>
+                    <span>{inst.def.displayName ?? inst.def.id}</span>
+                  </div>
+                );
+              })
+            }
+
+            {violationLines.length > 0 && (
+              <div style={{ marginTop: 8, background: "#2a1515", border: "1px solid #633", borderRadius: 4, padding: "6px 8px" }}>
+                <div style={{ fontSize: "0.7rem", color: "#e77", textTransform: "uppercase", marginBottom: 2 }}>Compatibility</div>
+                {violationLines.map((l, i) => <div key={i} style={{ fontSize: "0.75rem", color: "#e8c" }}>⚠ {l}</div>)}
+              </div>
+            )}
           </div>
+
+          {/* Right: shop or combat */}
           <div>
-            {this.tick.mode === "shop" ? (
+            {mode === "shop" ? (
               <>
-                <h4>Inventory</h4>
-                {this.inv.spots().map((s) => (
-                  <div key={s}><b>{s}:</b> {this.inv.contents(s).map((st) => `${this.inv.getDef(st.defId)?.displayName ?? st.defId}×${st.count}`).join(", ") || "—"}</div>
+                <div style={{ fontSize: "0.7rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Clinic</div>
+                {inventoryRows.map(({ spot, items }) => (
+                  <div key={spot} style={{ marginBottom: 6 }}>
+                    <span style={{ fontSize: "0.75rem", color: "#9ad" }}>{spot}</span>
+                    <div style={{ fontSize: "0.8rem", color: items.length ? "#ccc" : "#555", marginLeft: 8 }}>
+                      {items.length ? items.join(", ") : "empty"}
+                    </div>
+                  </div>
                 ))}
               </>
             ) : (
               <>
-                <h4>Combat</h4>
-                <table><tbody>
-                  {this.combatantsHolder.cs.map((c) => (
-                    <tr key={c.id}><td style={{ color: "#9ad" }}>{c.id}</td><td>HP {c.hp}</td><td>AP {c.resources?.ap}</td><td>{c.effects?.active().map((i) => i.id).join(",") || "—"}</td></tr>
-                  ))}
-                </tbody></table>
-                <pre style={{ background: "#000", padding: 6, maxHeight: 160, overflow: "auto" }}>{summarize(this.events.window(30), (e, at) => `${at}: ${JSON.stringify(e)}`) || "—"}</pre>
-                {this.combatantsHolder.ended && <h4 style={{ color: "#e88" }}>End: {this.combatantsHolder.ended}</h4>}
+                <div style={{ fontSize: "0.7rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Combatants</div>
+                {this.combatantsHolder.cs.map((c) => {
+                  const maxHp = c.id === "pc" ? 28 : 22;
+                  const pct = Math.max(0, (c.hp / maxHp) * 100);
+                  const activeEffects = c.effects?.active().map((i) => i.id) ?? [];
+                  return (
+                    <div key={c.id} style={{ marginBottom: 8 }}>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2, fontSize: "0.8rem" }}>
+                        <span style={{ color: c.id === "pc" ? "#7af" : "#f77", minWidth: 36 }}>{c.id === "pc" ? "You" : "Scav"}</span>
+                        <span style={{ color: "#aaa" }}>HP {c.hp}/{maxHp}</span>
+                        {activeEffects.length > 0 && <span style={{ color: "#da7", fontSize: "0.7rem" }}>{activeEffects.join(", ")}</span>}
+                      </div>
+                      <div style={{ height: 4, background: "#222", borderRadius: 2, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${pct}%`, background: c.id === "pc" ? (pct > 50 ? "#5c9" : pct > 25 ? "#da7" : "#d44") : "#c44" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {combatLines.length > 0 && (
+                  <div style={{ marginTop: 8, background: "#0a0a0a", border: "1px solid #222", borderRadius: 4, padding: "6px 8px", fontSize: "0.78rem", color: "#bbb" }}>
+                    {combatLines.map((line, i) => <div key={i}>{line}</div>)}
+                  </div>
+                )}
+                {this.combatantsHolder.ended && (
+                  <div style={{ marginTop: 8, fontSize: "0.9rem", fontWeight: 600, color: this.combatantsHolder.ended === "enemy-down" ? "#7c9" : "#e77" }}>
+                    {this.combatantsHolder.ended === "enemy-down" ? "Scav goes down. You win." : "You fall. The scav walks away."}
+                  </div>
+                )}
               </>
             )}
           </div>
