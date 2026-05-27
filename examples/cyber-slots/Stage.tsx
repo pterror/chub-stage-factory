@@ -132,25 +132,74 @@ export class CyberSlotsStage extends withPersistence<ChatStateType, InitStateTyp
 
   render(): ReactElement {
     const now = this.tick.n;
+    const violations = this.cyber.loadout.checkAllConstraints();
+    const equipped = [...this.cyber.loadout.getAllEquipped()];
+
+    // Human-readable constraint failure — no raw JSON.
+    // "Daedalus deck-jack mk II on your head — conflicts with flesh-only; needs neural-port"
+    const violationLines = violations.map((v) => {
+      const mod = MODS.get(v.source);
+      const modName = mod?.displayName ?? v.source;
+      const slotName = mod?.slot ?? "unknown slot";
+      const failed = v.failedTerms.map((t) =>
+        t.startsWith("!") ? `conflicts with ${t.slice(1)}` : `needs ${t}`
+      ).join("; ");
+      return `${modName} on your ${slotName} — ${failed}`;
+    });
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Cull&apos;s table — tick {now}</h3>
-        <h4>Body</h4>
-        <table><tbody>
-          {this.cyber.body.getSlots().map((s) => (
-            <tr key={s}><td style={{ color: "#9ad", padding: "2px 8px" }}>{s}</td><td>{this.cyber.body.getEffectiveTags(s).toArray().join(", ")}</td></tr>
-          ))}
-        </tbody></table>
-        <h4>Equipped</h4>
-        {this.cyber.loadout.getAllEquipped().size === 0 ? <em style={{ opacity: 0.5 }}>nothing</em> : (
-          <ul>{[...this.cyber.loadout.getAllEquipped()].map(([slot, inst]) => {
-            const f = this.cyber.loadout.fit(slot, now)!;
-            return <li key={slot}><b>{inst.def.id}</b> on {slot} — fit: <span style={{ color: f.fit === "comfortable" ? "#9c9" : f.fit === "broken" ? "#e77" : "#dd8" }}>{f.fit}</span> {f.failedTerms.length ? `(failed: ${f.failedTerms.join(", ")})` : ""}</li>;
-          })}</ul>
+      <div style={{ padding: 12, fontFamily: "system-ui, sans-serif", color: "#e8e8e8", background: "#111", maxWidth: 420 }}>
+        <h3 style={{ marginTop: 0, fontSize: "1rem", color: "#9ad", letterSpacing: "0.05em" }}>
+          Dr. Cull&apos;s Operating Table
+        </h3>
+
+        {/* Body mods */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: "0.75rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Body</div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {this.cyber.body.getSlots().map((s) => {
+              const tags = this.cyber.body.getEffectiveTags(s).toArray();
+              const hasMod = !tags.includes("flesh-only") || tags.some((t) => t.includes("port") || t.includes("socket"));
+              return (
+                <div key={s} style={{ background: hasMod ? "#1a2a1a" : "#1a1a1a", border: `1px solid ${hasMod ? "#4a7" : "#333"}`, borderRadius: 4, padding: "4px 8px", fontSize: "0.8rem" }}>
+                  <span style={{ color: "#9ad" }}>{s}</span>
+                  {hasMod && <span style={{ marginLeft: 6, color: "#7c9", fontSize: "0.75rem" }}>
+                    {tags.filter((t) => !["flesh-only"].includes(t) && !t.startsWith("hair") && !t.startsWith("skin")).join(" · ")}
+                  </span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Cyberware loadout */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: "0.75rem", color: "#666", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Installed</div>
+          {equipped.length === 0
+            ? <div style={{ color: "#555", fontStyle: "italic", fontSize: "0.85rem" }}>Nothing bolted on yet</div>
+            : equipped.map(([slot, inst]) => {
+              const f = this.cyber.loadout.fit(slot, now)!;
+              const ok = f.fit === "comfortable";
+              return (
+                <div key={slot} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0", borderBottom: "1px solid #222" }}>
+                  <span style={{ color: ok ? "#7c9" : "#e77", fontSize: "1.1rem" }}>{ok ? "◉" : "⚠"}</span>
+                  <span style={{ flex: 1, fontSize: "0.85rem" }}>{inst.def.displayName ?? inst.def.id}</span>
+                  <span style={{ color: "#555", fontSize: "0.75rem" }}>{slot}</span>
+                </div>
+              );
+            })
+          }
+        </div>
+
+        {/* Violations — player-facing prose, not JSON */}
+        {violationLines.length > 0 && (
+          <div style={{ background: "#2a1515", border: "1px solid #633", borderRadius: 4, padding: "8px 10px" }}>
+            <div style={{ color: "#e77", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Compatibility Warning</div>
+            {violationLines.map((line, i) => (
+              <div key={i} style={{ fontSize: "0.85rem", color: "#e8c" }}>⚠ {line}</div>
+            ))}
+          </div>
         )}
-        <h4>Violations</h4>
-        <pre style={{ background: "#000", padding: 8 }}>{JSON.stringify(this.cyber.loadout.checkAllConstraints(), null, 2)}</pre>
-        <div style={{ opacity: 0.7, fontSize: "0.85rem" }}>last: {this.tick.lastAction ?? "—"}</div>
       </div>
     );
   }
