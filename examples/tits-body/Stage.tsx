@@ -101,26 +101,97 @@ export class TitsBodyStage extends withPersistence<ChatStateType, InitStateType,
   render(): ReactElement {
     const { body, tick, snaps } = this.p;
     const now = tick.n;
+
+    // Map raw tag strings to player-facing descriptions.
+    const TAG_LABELS: Record<string, string> = {
+      human: "human",
+      "horned!none": "no horns",
+      "hair-long": "long hair",
+      "skin-soft": "soft skin",
+      hands: "hands",
+      feet: "feet",
+      furred: "covered in fur",
+      "prehensile-mild": "gently prehensile",
+      "tail-cat": "cat tail",
+      nub: "just a small nub",
+      "stubby-tail": "a stubby tail",
+      horned: "horned",
+      "horns-dragon": "draconic horns",
+      "scaled-trace": "faint scale markings",
+      "horn-buds": "horn buds forming",
+    };
+
+    // Map slot ids to display names.
+    const SLOT_LABELS: Record<string, string> = {
+      head: "Head",
+      torso: "Torso",
+      arms: "Arms",
+      legs: "Legs",
+      tail: "Tail",
+    };
+
+    // Map active transformation ids to in-progress prose.
+    const TF_PROGRESS: Record<string, (elapsed: number, duration: number | null | undefined) => string> = {
+      cat_tail: (e, d) => {
+        const f = d ? e / d : 0;
+        if (f < 0.3) return "A small nub is growing at the base of your spine.";
+        if (f < 0.7) return "A stubby, furred tail has emerged and is still lengthening.";
+        return "A full cat tail sways behind you.";
+      },
+      dragon_horns: (e, d) => {
+        const f = d ? e / d : 0;
+        if (f < 0.5) return "Horn buds are pushing through your scalp.";
+        return "Draconic horns have fully emerged, with faint scales at their base.";
+      },
+      fur_torso: () => "Soft fur is spreading across your torso.",
+    };
+
+    function describeSlot(slot: string): string {
+      const tags = body.getEffectiveTags(slot).toArray();
+      const labeled = tags
+        .map((t) => TAG_LABELS[t])
+        .filter((l): l is string => l !== undefined && l !== "human" && l !== "no horns" && l !== "soft skin" && l !== "hands" && l !== "feet");
+      if (labeled.length === 0) return "Unchanged.";
+      return labeled.join(", ");
+    }
+
+    const activeTfs = body.getTransformations();
+    const hasSnapshots = snaps.list().filter((s) => s !== "baseline").length > 0;
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Body — tick {now}</h3>
-        <table style={{ borderCollapse: "collapse" }}>
-          <tbody>
-            {body.getSlots().map((s) => (
-              <tr key={s}><td style={{ padding: "2px 8px", color: "#9ad" }}>{s}</td>
-                <td style={{ padding: "2px 8px" }}>{body.getEffectiveTags(s).toArray().join(", ") || "—"}</td></tr>
-            ))}
-          </tbody>
-        </table>
-        <h4>Active transformations</h4>
-        {body.getTransformations().length === 0 ? <em style={{ opacity: 0.5 }}>none</em> : (
-          <ul>{body.getTransformations().map((tf) => (
-            <li key={tf.id}><b>{tf.id}</b> on {tf.slot} — elapsed {now - tf.startTime}/{tf.duration ?? "∞"} — adding [{tf.addTags.join(", ")}]</li>
-          ))}</ul>
+      <div style={{ padding: 12, fontFamily: "sans-serif", color: "#ddd", background: "#1a1a1a", maxWidth: 480 }}>
+        <h3 style={{ marginTop: 0, fontSize: "1rem", color: "#c9a9e8" }}>Your body</h3>
+
+        {body.getSlots().map((slot) => {
+          const desc = describeSlot(slot);
+          const unchanged = desc === "Unchanged.";
+          return (
+            <div key={slot} style={{ marginBottom: 6 }}>
+              <span style={{ fontSize: "0.75rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em" }}>{SLOT_LABELS[slot] ?? slot}</span>
+              <span style={{ marginLeft: 8, fontSize: "0.9rem", color: unchanged ? "#555" : "#ddd", fontStyle: unchanged ? "italic" : "normal" }}>{desc}</span>
+            </div>
+          );
+        })}
+
+        {activeTfs.length > 0 && (
+          <>
+            <h4 style={{ fontSize: "0.85rem", color: "#888", marginBottom: 4, marginTop: 12 }}>Changing now</h4>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {activeTfs.map((tf) => {
+                const elapsed = now - tf.startTime;
+                const progress = TF_PROGRESS[tf.id];
+                const text = progress ? progress(elapsed, tf.duration) : `${TFS.get(tf.id)?.displayName ?? tf.id} — taking effect.`;
+                return <li key={tf.id} style={{ fontSize: "0.85rem", color: "#bbb", marginBottom: 3 }}>{text}</li>;
+              })}
+            </ul>
+          </>
         )}
-        <div style={{ opacity: 0.7, fontSize: "0.85rem", marginTop: 8 }}>
-          last applied: {tick.lastApplied ?? "—"} · snapshots: {snaps.list().join(", ") || "—"}
-        </div>
+
+        {hasSnapshots && (
+          <div style={{ marginTop: 10, fontSize: "0.8rem", color: "#7a7" }}>
+            You can ask Vey to restore your previous body.
+          </div>
+        )}
       </div>
     );
   }
