@@ -2,6 +2,8 @@
 
 The spec for this stage. Filled out during Phase 1 (co-design) and treated as authoritative during Phase 2 (`/loop`).
 
+See `DESIGN.example.md` for a filled-in example (using the `inventory` example stage as the case study).
+
 ## Identity
 
 | Field | Value |

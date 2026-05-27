@@ -68,6 +68,52 @@ class MyStage extends StageBase<Init, Chat, Msg, Cfg> {
 In the recipes below, the persistence wiring is elided after recipe 1.
 Refer back to this section for the boilerplate.
 
+## 0-hoc. `withPersistence` — eliminate the boilerplate entirely
+
+All 8 examples use `withPersistence` instead of writing `load` and `setState`
+by hand. If your `load()` does not need to run any custom logic before
+`store.load()`, use the HOC.
+
+**When to use:** any stage that follows the standard pattern (constructor wires
+shards, `load` hydrates, `setState` delegates). If `load()` needs a custom
+hydration order, fall back to the manual recipe above.
+
+```ts
+import { withPersistence, mergeResponses } from "./lib/persistence";
+import { inventoryPattern, type InventoryBundle } from "./lib/patterns/inventory";
+
+// Replace `extends StageBase<I, C, M, Ch>` with:
+export class MyStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
+  p!: InventoryBundle;   // or whatever primitives your stage composes
+
+  constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
+    super(data);
+    const ms = (data.messageState as Record<string, string | undefined> | null) ?? null;
+    this.p = inventoryPattern({ messageState: ms, stageDirections: STAGE_DIRECTIONS });
+    // ... register items, spots, etc. ...
+    this.initStore(() => this.p.store);   // ← call at end of constructor
+  }
+
+  // load() and setState() are inherited — do not implement them.
+
+  async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    return this.p.buildBeforePrompt(msg, this.bound) as Promise<Partial<StageResponse<ChatStateType, MessageStateType>>>;
+  }
+
+  async afterResponse(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    return mergeResponses({}, await this.bound.afterResponse(msg));
+  }
+}
+```
+
+`withPersistence` wires `load → store.load() → bound.initial()` and reads all
+three state-layer mirrors so `initState` / `chatState` / `messageState` are
+correctly populated regardless of which backends your shards use. See
+`src/lib/persistence/with-persistence.ts` for the full implementation and the
+`WHEN NOT TO USE` note.
+
+Reference: `src/lib/persistence/with-persistence.ts`
+
 ## 0a. Def catalogs — `Registry<T>` over `Record<Id, T>`
 
 Every recipe below declares a def catalog (TFS, MODS, EFFECT_DEFS,

@@ -1,45 +1,122 @@
 # chub-stage-factory
 
-A self-contained Claude Code workspace for designing and shipping a single [Chub](https://chub.ai) stage. Forked structurally from [CharHubAI/extension-template](https://github.com/CharHubAI/extension-template); the template's "clone-me" framing has been replaced by a two-phase workflow driven by `CLAUDE.md`.
+A workspace for building [Chub](https://chub.ai) stages. It ships a library of
+game-state primitives (`src/lib/`), composable pattern recipes (`src/lib/PATTERNS.md`),
+8 working reference examples (`examples/`), build and deploy scripts, and a
+Claude Code workflow that takes you from blank spec to deployed stage.
 
-## Workflow
+Structurally forked from [CharHubAI/extension-template](https://github.com/CharHubAI/extension-template);
+the "clone-me" framing has been replaced by the two-phase workflow below.
 
-- **Phase 1 — Co-design.** Talk through the stage idea with Claude; the conversation fills out `DESIGN.md` (identity, concept, UI, LLM interaction, state, config, tests).
-- **Phase 2 — Ship.** Run `/loop`. Claude reads `DESIGN.md` + `STATUS.md` and autonomously builds the stage, ticking off the task list and recording decisions.
-- `DESIGN.md` is the spec. `STATUS.md` is the running log.
-- `src/Stage.tsx`, `src/TestRunner.tsx`, and `public/chub_meta.yaml` are filled in during the phases — leave them alone until then.
+---
 
-## Quickstart
+## What is a Chub stage?
 
-```bash
-nix develop                  # node 21 + yarn
-# open this directory in Claude Code
-# talk through what you want the stage to be (Phase 1)
-# when DESIGN.md feels complete, say: /loop
-```
+A stage is a TypeScript class (`StageBase`) that runs alongside a Chub AI chat.
+It receives every message before the model sees it (`beforePrompt`) and every
+reply before the user sees it (`afterResponse`), maintaining game state across
+the conversation. Stages can render a sidebar UI and push system prompts
+describing the current world state to the model. See the
+[Chub stages docs](https://docs.chub.ai/docs/stages) for the platform side.
 
-See `CLAUDE.md` for the full workflow and behavioral rules.
+---
 
-## Reference examples
-
-`examples/` ships 8 working stages — one per recipe in
-`src/lib/PATTERNS.md` plus a composite cyberpunk-clinic that combines
-most primitives. Browse them under `yarn dev` (a picker UI lists every
-example plus your own `src/Stage.tsx`). Each is independently buildable
-and deployable to Chub:
+## Quick start
 
 ```bash
-node scripts/build-example.mjs <name>            # build one
-node scripts/build-all-examples.mjs              # build all
-STAGE_ID_<NAME_UPPER>=… CHUB_AUTH_TOKEN=… \
-  node scripts/deploy-example.mjs <name>         # deploy one
+# 1. Enter the dev environment (provides node 21 + bun via Nix)
+nix develop
+
+# 2. Install deps and start the picker UI
+bun install
+bun run dev
+# Opens a browser with a picker listing every reference example.
+
+# 3. Build a specific example to verify the pipeline
+node scripts/build-example.mjs inventory
+
+# 4. Run an example in headless mode (no browser)
+node scripts/run-stage.mjs inventory
 ```
 
-See `examples/README.md` for the index.
+---
+
+## I want to build a new stage
+
+**With Claude Code (recommended):**
+
+Open this directory in Claude Code and read `CLAUDE.md`. The two-phase workflow
+walks you through co-designing a spec in `DESIGN.md` (Phase 1) and then running
+`/loop` to let Claude build and iterate autonomously (Phase 2).
+
+**Without Claude Code (manual path):**
+
+1. Copy a reference example that is close to what you want:
+   ```bash
+   cp -r examples/inventory examples/my-stage
+   ```
+2. Edit `examples/my-stage/Stage.tsx` — the primitives you need are in `src/lib/`.
+   See `src/lib/PATTERNS.md` for recipe skeletons.
+3. Update `examples/my-stage/chub_meta.yaml` and `scenario.yaml` with your
+   stage's name and description.
+4. Add your example to `examples/registry.ts` so the dev picker finds it.
+5. Build and deploy:
+   ```bash
+   node scripts/build-example.mjs my-stage
+   STAGE_ID_MY_STAGE=<chub-id> CHUB_AUTH_TOKEN=<token> \
+     node scripts/deploy-example.mjs my-stage
+   ```
+
+Fill in `DESIGN.md` either way — it doubles as a deploy checklist.
+See `DESIGN.example.md` for a filled-in example.
+
+---
+
+## What's in here
+
+```
+src/lib/              # Primitives (one file per domain)
+  inventory.ts        # Spot-based stacks with carry-class semantics
+  body.ts             # Part-tracked body with transformation stacking
+  equipment.ts        # Equipment x transformation tag interop
+  combat-turn.ts      # Initiative-ordered turn combat
+  combat-realtime.ts  # Tick-based spatial combat
+  effects.ts          # Buffs / debuffs / status effects
+  physics.ts          # AABB / circle collision
+  persistence/        # PersistenceStore, withPersistence HOC, Chub state layers
+  patterns/           # High-level composers (inventoryPattern, scenePattern, ...)
+  ...                 # 20+ additional modules; each has a companion .md
+
+src/lib/PATTERNS.md   # 20 composable recipes — start here when choosing primitives
+
+examples/             # 8+ self-contained working stages (one per recipe)
+  inventory/          # Simplest — spot-based shopkeeper
+  turn-combat/        # Initiative-ordered combat
+  tits-body/          # Body transformation
+  cyber-slots/        # Equipment x transformation
+  effects/            # Buffs / debuffs
+  physics/            # Collision sandbox
+  realtime-combat/    # Tick-based spatial
+  composite-showcase/ # Cyberpunk clinic combining most primitives
+  world-primary/      # World-state-primary RP frontend shape
+  registry.ts         # Central index (add your example here)
+  README.md           # Example index + build/deploy reference
+
+scripts/              # build-example.mjs, build-all-examples.mjs,
+                      # deploy-example.mjs, run-stage.mjs
+
+scenarios/            # Scenario fixtures for integration testing
+```
+
+---
 
 ## References
 
 - Chub stages docs: <https://docs.chub.ai/docs/stages>
 - Upstream extension template: <https://github.com/CharHubAI/extension-template>
+- Design spec template: `DESIGN.md` / `DESIGN.example.md`
+- Pattern recipes: `src/lib/PATTERNS.md`
+- Roadmap: `ROADMAP.md`
+- UX audit: `UX-AUDIT-2026-05-27.md`
 
 `LICENSE.txt` carries over from the upstream extension template.
