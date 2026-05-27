@@ -69,7 +69,7 @@ lookup after you know what you're looking for.
 - `resolveUnequip(violations): string[]`
 - `resolveDegrade(violations): Record<source, failedTerms>`
 
-## `snapshots.ts`
+## `snapshots.ts` — [SNAPSHOTS.md](SNAPSHOTS.md)
 
 - `interface SnapshotData { baseSlots, transformations }`
 - `interface DiffResult { changed, slotsAdded, slotsRemoved, tagsAdded, tagsRemoved, tfsAdded, tfsRemoved }`
@@ -257,7 +257,7 @@ lookup after you know what you're looking for.
 - `interface TriggerSetState { lastFiredAt, fired }`
 - `class TriggerSet<S, E, A> { triggers; resolvers; constructor(triggers, resolvers?); evaluate(state, refs, rng, now?): E[]; reset(id?); toJSON(); static fromJSON(triggers, data, resolvers?) }`
 
-## `prose-register.ts`
+## `prose-register.ts` — [PROSE-REGISTER.md](PROSE-REGISTER.md)
 
 - `type ArchitectureName` (10 entries; see PROSE.md)
 - `interface RegisterSpec { pov, tense, distance, extras? }`
@@ -325,7 +325,7 @@ lookup after you know what you're looking for.
 - `interface GenerativeRegistry<T> { base: PlaceholderRegistry<T>; getOrGenerate(id): Promise<T> }`
 - `generativeRegistry<T>(opts): GenerativeRegistry<T>` — cache-by-key + auto-generate-on-miss; concurrent calls for same id coalesce
 
-## `chub-adapters.ts`
+## `chub-adapters.ts` — [CHUB-ADAPTERS.md](CHUB-ADAPTERS.md)
 
 - `interface HookCtx<C, M> { state, chatState?, now }`
 - `type Hook<C, M> = (msg, ctx) => Promise<Partial<StageResponse<C, M>>>`
@@ -379,7 +379,7 @@ table and full example.
 - `counterShard(name, box: { n: number }, backend, history): Shard<number>` — shard a pure integer counter; box must contain only `n`
 - `layerShards(layer: { backend, history?: () => History }, entries: Record<string, SaveableState>): Record<string, Shard>` — group shards that share a backend+history; `history` is a factory called once per entry; spread result into PersistenceStore constructor. Net savings only for 3+ multi-line shard entries.
 
-## `replay.ts`
+## `replay.ts` — [REPLAY.md](REPLAY.md)
 
 - `interface LogEntry<K, D> { at, kind, data }`
 - `type Dispatcher<S, E> = (state, entry) => S`
@@ -439,7 +439,9 @@ table and full example.
 - `cubicEase(t): number`
 - Hash-seeded sine helpers for deterministic jitter
 
-## `3d/scene.tsx` (Wave 2F)
+## `3d/` — [3d/README.md](3d/README.md)
+
+### `3d/scene.tsx` (Wave 2F)
 
 - `ThreeSceneProps` — R3F canvas + lifecycle binding props
 - `ThreeSceneHandle` — imperative handle exposed via `useImperativeHandle`
