@@ -39,6 +39,7 @@ import { Rng } from "../../src/lib/rng";
 import { renderTrigger, type RenderStub } from "../../src/lib/patterns/render-trigger";
 import { freeformPipeline, type OracleDelta } from "../../src/lib/patterns/freeform-pipeline";
 import { type SchemaParser } from "../../src/lib/generate";
+import { World, worldResolvers } from "../../src/lib/world";
 
 import { WorldStatePanel } from "../../src/lib/ui/WorldStatePanel";
 import { ActionSurface, type VerbEntry } from "../../src/lib/ui/ActionSurface";
@@ -49,15 +50,6 @@ import { FreeformInput } from "../../src/lib/ui/FreeformInput";
 /* ------------------------------------------------------------------ *
  * World schema                                                        *
  * ------------------------------------------------------------------ */
-
-interface Location {
-  id: string;
-  name: string;
-  description: string;
-  exits: Record<string, string>; // direction → location id
-  npcs: string[];                // npc ids present here
-  items: string[];               // item ids present here
-}
 
 interface Npc {
   id: string;
@@ -98,33 +90,6 @@ type WorldConfig = null;
  * World data (seeded at construct time)                               *
  * ------------------------------------------------------------------ */
 
-const LOCATIONS: Record<string, Location> = {
-  "village-square": {
-    id: "village-square",
-    name: "Village Square",
-    description: "The dusty heart of a small settlement. A well stands in the centre; smoke curls from the inn to the north.",
-    exits: { north: "inn", east: "market" },
-    npcs: ["elder-mira"],
-    items: ["map-fragment"],
-  },
-  "inn": {
-    id: "inn",
-    name: "The Ember Inn",
-    description: "Low-beamed, candle-lit. The smell of stew and old wood. Travellers murmur at corner tables.",
-    exits: { south: "village-square" },
-    npcs: ["innkeeper-holt"],
-    items: ["candle"],
-  },
-  "market": {
-    id: "market",
-    name: "Market Stalls",
-    description: "A handful of weathered stalls. Cloth banners snap in the wind. Prices are handwritten on slate.",
-    exits: { west: "village-square" },
-    npcs: ["merchant-vas"],
-    items: ["rope", "lantern"],
-  },
-};
-
 const NPCS: Record<string, Npc> = {
   "elder-mira": {
     id: "elder-mira",
@@ -155,6 +120,30 @@ const ITEMS: Record<string, ItemDef> = {
   "rope":         { id: "rope",         name: "Coil of Rope",  description: "Twenty feet of hempen rope." },
   "lantern":      { id: "lantern",      name: "Oil Lantern",   description: "A brass lantern with oil remaining." },
 };
+
+/** NPC ids — used to distinguish NPCs from items in world.entitiesAt(). */
+const NPC_IDS = new Set(Object.keys(NPCS));
+/** Item ids — used to distinguish items from NPCs in world.entitiesAt(). */
+const ITEM_IDS = new Set(Object.keys(ITEMS));
+
+const world = new World();
+world
+  .addRoom({ id: "village-square", name: "Village Square",  description: "The dusty heart of a small settlement. A well stands in the centre; smoke curls from the inn to the north.", exits: {} })
+  .addRoom({ id: "inn",            name: "The Ember Inn",   description: "Low-beamed, candle-lit. The smell of stew and old wood. Travellers murmur at corner tables.",              exits: {} })
+  .addRoom({ id: "market",         name: "Market Stalls",   description: "A handful of weathered stalls. Cloth banners snap in the wind. Prices are handwritten on slate.",          exits: {} })
+  .connect("village-square", "north", "inn",            "south")
+  .connect("village-square", "east",  "market",         "west");
+
+// Place NPCs.
+world.locate("elder-mira",     "village-square");
+world.locate("innkeeper-holt", "inn");
+world.locate("merchant-vas",   "market");
+
+// Place items (room items — player inventory is tracked in messageState).
+world.locate("map-fragment", "village-square");
+world.locate("candle",       "inn");
+world.locate("rope",         "market");
+world.locate("lantern",      "market");
 
 /* ------------------------------------------------------------------ *
  * Triggers                                                            *
@@ -344,15 +333,15 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
     this.isProcessing = true;
 
     const playerText = msg.content ?? "";
-    const location = LOCATIONS[this.ms.locationId];
+    const location = world.getRoom(this.ms.locationId) ?? { id: this.ms.locationId, name: this.ms.locationId, description: "", exits: {} };
 
-    // Build scope from current location.
-    const scope = new Set<string>([
-      ...Object.keys(location.exits),
-      ...location.npcs,
-      ...location.items,
-      ...this.ms.inventory,
-    ]);
+    // Sync player's location into world (world is module-level; ms is branch-aware).
+    world.locate("player", this.ms.locationId);
+
+    // Build scope via world — exits + room-mates + carried items.
+    const scope = world.scope("player", {
+      includeCarried: () => this.ms.inventory,
+    });
 
     // Run freeform pipeline.
     let newProse = "";
@@ -366,7 +355,7 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
             verbs: { move: "go", walk: "go", travel: "go" },
             nouns: Object.fromEntries(
               [
-                ...Object.values(LOCATIONS).map((l) => [l.name.toLowerCase(), l.id]),
+                ...world.rooms().map((r) => [r.name.toLowerCase(), r.id]),
                 ...Object.values(NPCS).map((n) => [n.name.toLowerCase(), n.id]),
                 ...Object.values(ITEMS).map((it) => [it.name.toLowerCase(), it.id]),
               ],
@@ -374,9 +363,13 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
           },
           fallback: { quietCall: (p) => this.runner.runQuiet(p) },
         },
-        oraclePrompt: (text, sc) => [
-          `World state: player is in "${location.name}". Exits: ${Object.entries(location.exits).map(([d, to]) => `${d}→${LOCATIONS[to]?.name ?? to}`).join(", ")}.`,
-          `Present NPCs: ${location.npcs.map((id) => NPCS[id]?.name ?? id).join(", ") || "none"}.`,
+        oraclePrompt: (text, sc) => {
+          const exits = world.exitsFrom(this.ms.locationId);
+          const roomEntities = world.entitiesAt(this.ms.locationId).filter(e => e !== "player");
+          const presentNpcIds = roomEntities.filter(e => NPC_IDS.has(e));
+          return [
+          `World state: player is in "${location.name}". Exits: ${Object.entries(exits).map(([d, ex]) => `${d}→${world.getRoom(ex.to)?.name ?? ex.to}`).join(", ")}.`,
+          `Present NPCs: ${presentNpcIds.map((id) => NPCS[id]?.name ?? id).join(", ") || "none"}.`,
           `Player inventory: ${this.ms.inventory.map((id) => ITEMS[id]?.name ?? id).join(", ") || "empty"}.`,
           `Visible: ${[...sc].join(", ")}.`,
           ``,
@@ -390,14 +383,15 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
           '  setFlags?: Record<string, boolean>',
           '  stub?: { tone?: string; beats?: string[]; lengthHint?: string }',
           "Reply with ONLY the JSON object.",
-        ].join("\n"),
+        ].join("\n");
+        },
         oracleSchema: parseOracleDelta,
         validateDelta: (d) => {
-          if (d.newLocationId && !LOCATIONS[d.newLocationId]) return false;
+          if (d.newLocationId && !world.getRoom(d.newLocationId)) return false;
           return true;
         },
         coerceDelta: (d) => {
-          if (d.newLocationId && !LOCATIONS[d.newLocationId]) {
+          if (d.newLocationId && !world.getRoom(d.newLocationId)) {
             const { newLocationId: _, ...rest } = d;
             return rest;
           }
@@ -407,10 +401,16 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
         policy: "coerce",
         render: async (stub, intent) => {
           // If we got a grammar intent for movement, apply it deterministically.
-          if (intent?.verb === "go" && intent.target && LOCATIONS[intent.target]) {
-            this.ms.locationId = intent.target;
-          } else if (intent?.verb === "take" && intent.target && location.items.includes(intent.target)) {
+          if (intent?.verb === "go" && intent.target) {
+            // Route through world.move (resolves direction or room id).
+            const events = world.move("player", intent.target, worldResolvers(world));
+            if (events) {
+              const entered = events.find(e => e.kind === "entered");
+              if (entered && "roomId" in entered) this.ms.locationId = entered.roomId;
+            }
+          } else if (intent?.verb === "take" && intent.target && ITEM_IDS.has(intent.target) && world.where(intent.target) === this.ms.locationId) {
             this.ms.inventory.push(intent.target);
+            world.detach(intent.target);
           } else if (intent?.verb === "examine") {
             // Examine doesn't change state; just a render hook.
           } else if (intent?.verb === "talk" && intent.target) {
@@ -423,8 +423,9 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
 
           // Evaluate triggers.
           const rng = Rng.fromSeed(`world-primary-${this.ms.turnCount}`).stream("mechanical");
+          const { getLocation } = worldResolvers(world);
           const triggerResolvers = {
-            getLocation: (_actor: unknown, state: WorldMessageState) => state.locationId,
+            getLocation: (actor: unknown) => typeof actor === "string" ? getLocation(actor) : undefined,
             getStat: (_actor: unknown, stat: string, state: WorldMessageState) =>
               stat === "turnCount" ? state.turnCount : undefined,
             getFlag: (flag: string, state: WorldMessageState) =>
@@ -511,7 +512,10 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
   }
 
   private applyDelta(delta: WorldDelta): void {
-    if (delta.newLocationId) this.ms.locationId = delta.newLocationId;
+    if (delta.newLocationId) {
+      world.locate("player", delta.newLocationId);
+      this.ms.locationId = delta.newLocationId;
+    }
     if (delta.relationDeltas) {
       for (const [id, change] of Object.entries(delta.relationDeltas)) {
         if (this.ms.relations[id] !== undefined) {
@@ -533,26 +537,27 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
   }
 
   private deriveVerbs(): VerbEntry[] {
-    const location = LOCATIONS[this.ms.locationId];
     const verbs: VerbEntry[] = [];
+    const exits = world.exitsFrom(this.ms.locationId);
+    const roomEntities = world.entitiesAt(this.ms.locationId).filter(e => e !== "player");
 
     // Movement verbs.
-    for (const [dir, targetId] of Object.entries(location.exits)) {
-      const target = LOCATIONS[targetId];
+    for (const [dir, exit] of Object.entries(exits)) {
+      const target = world.getRoom(exit.to);
       verbs.push({
         id: `go-${dir}`,
-        label: `Go ${dir} → ${target?.name ?? targetId}`,
+        label: `Go ${dir} → ${target?.name ?? exit.to}`,
         enabled: !this.isProcessing,
         onClick: () => {
           // Handled via beforePrompt; we synthesise a message.
           this.isProcessing = true;
         },
-        hint: `Move ${dir} to ${target?.name ?? targetId}`,
+        hint: `Move ${dir} to ${target?.name ?? exit.to}`,
       });
     }
 
     // NPC interaction verbs.
-    for (const npcId of location.npcs) {
+    for (const npcId of roomEntities.filter(e => NPC_IDS.has(e))) {
       const npc = NPCS[npcId];
       if (!npc) continue;
       verbs.push({
@@ -564,8 +569,8 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
       });
     }
 
-    // Item verbs.
-    for (const itemId of location.items) {
+    // Item verbs (only room items not carried by player).
+    for (const itemId of roomEntities.filter(e => ITEM_IDS.has(e))) {
       const item = ITEMS[itemId];
       if (!item) continue;
       const held = this.ms.inventory.includes(itemId);
@@ -589,11 +594,10 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
   }
 
   render(): ReactElement {
-    const location = LOCATIONS[this.ms.locationId] ?? {
-      id: this.ms.locationId, name: this.ms.locationId, description: "", exits: {}, npcs: [], items: [],
-    };
+    const location = world.getRoom(this.ms.locationId) ?? { id: this.ms.locationId, name: this.ms.locationId, description: "", exits: {} };
+    const roomEntities = world.entitiesAt(this.ms.locationId).filter(e => e !== "player");
 
-    const presentNpcs = location.npcs.map((id) => {
+    const presentNpcs = roomEntities.filter(e => NPC_IDS.has(e)).map((id) => {
       const npc = NPCS[id];
       if (!npc) return null;
       const rel = this.ms.relations[id] ?? 0;

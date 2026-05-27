@@ -226,17 +226,19 @@ All other 29 composers — cyber-slots, physics, realtime-combat, dialogue, scor
 - Wave 2F physics/assets/camera-rigs — pending.
 - `freeformPipeline` `"extend"` policy — removed (was a TODO throw; see decision §4).
 
-## N. `world-primary` not migrated to `world.ts` yet
+## N. `world-primary` migrated to `world.ts`
 
 Wave 2B `world.ts` (graph of rooms + scope queries) was landed in 2026-05-27.
-`examples/world-primary/Stage.tsx` predates the primitive and hand-rolls every
-concept it captures: `LOCATIONS: Record<string, Location>` literal, manual
-scope-Set construction in `beforePrompt`, deterministic `intent.verb === "go"`
-movement logic, etc. Migrating cleanly requires reshaping how the example
-seeds its world and how `freeformPipeline`'s `applyDelta` mutates location —
-non-trivial enough to risk regressing the currently-green smoke scenario.
+`examples/world-primary/Stage.tsx` has been migrated:
 
-Deferred. TODO: in a follow-up, replace the inline LOCATIONS/NPCS literals
-with `new World()` + `world.locate(…)`, pass `world.scope("player")` to
-`parseIntent`, and route `intent.verb === "go"` through `world.move`. The
-`worldResolvers(world)` helper is in place for that migration.
+- `LOCATIONS` literal replaced with `new World()` + `.addRoom()` + `.connect()`.
+- NPCs and items placed via `world.locate(entityId, roomId)`.
+- Manual scope-Set construction replaced with `world.scope("player", { includeCarried })`.
+- `intent.verb === "go"` routed through `world.move("player", direction)`.
+- Room validation in `validateDelta`/`coerceDelta` uses `world.getRoom()`.
+- `applyDelta` syncs `world.locate("player", newLocationId)` alongside `ms.locationId`.
+- Trigger `getLocation` resolver wraps `worldResolvers(world).getLocation` with an `unknown` actor guard (trigger resolver API is two-arg `(actor: unknown, state: S)`, world is single-arg `(actor: string)`).
+- `deriveVerbs` uses `world.exitsFrom()` + `world.entitiesAt()` filtered by `NPC_IDS`/`ITEM_IDS` sets.
+- `synonyms.nouns` built from `world.rooms()` instead of `Object.values(LOCATIONS)`.
+
+`bun run build`, `bun run lint`, `bun run test`, `bun run test:smoke` all pass.
