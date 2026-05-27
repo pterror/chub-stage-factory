@@ -46,6 +46,12 @@ import { ActionSurface, type VerbEntry } from "../../src/lib/ui/ActionSurface";
 import { ScenePane } from "../../src/lib/ui/ScenePane";
 import { ChatLogSidebar, type LogEntry } from "../../src/lib/ui/ChatLogSidebar";
 import { FreeformInput } from "../../src/lib/ui/FreeformInput";
+import type {
+  StageIntrospect,
+  VerbDescriptor,
+  StageDescriptor,
+  InvocationResult,
+} from "../../src/lib/introspect";
 
 /* ------------------------------------------------------------------ *
  * World schema                                                        *
@@ -235,10 +241,46 @@ const parseOracleDelta: SchemaParser<OracleDelta<WorldDelta>> = (text) => {
 };
 
 /* ------------------------------------------------------------------ *
+ * Verb → player-text translation                                      *
+ * ------------------------------------------------------------------ *
+ * Stage.invokeVerb feeds these strings into beforePrompt as the
+ * synthesised player message. The freeform pipeline's intent parser
+ * (with the synonym table set up below) then re-parses them into
+ * structured intents — so verb invocation and freeform typing both
+ * traverse the same code path. */
+function verbToPlayerText(name: string, args?: Record<string, unknown>): string | null {
+  if (name === "freeform") {
+    const t = args?.text;
+    if (typeof t !== "string") return null;
+    return t;
+  }
+  if (name === "look") return "look";
+  if (name.startsWith("go-")) {
+    const dir = name.slice("go-".length);
+    return `go ${dir}`;
+  }
+  if (name.startsWith("talk-")) {
+    const npcId = name.slice("talk-".length);
+    return `talk to ${npcId}`;
+  }
+  if (name.startsWith("examine-")) {
+    const itemId = name.slice("examine-".length);
+    return `examine ${itemId}`;
+  }
+  if (name.startsWith("take-")) {
+    const itemId = name.slice("take-".length);
+    return `take ${itemId}`;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ *
  * Stage                                                               *
  * ------------------------------------------------------------------ */
 
-export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState, WorldMessageState, WorldConfig> {
+export class WorldPrimaryStage
+  extends StageBase<WorldInitState, WorldChatState, WorldMessageState, WorldConfig>
+  implements StageIntrospect {
 
   private assembler: ContextAssembler;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -536,61 +578,142 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
     }
   }
 
-  private deriveVerbs(): VerbEntry[] {
-    const verbs: VerbEntry[] = [];
-    const exits = world.exitsFrom(this.ms.locationId);
-    const roomEntities = world.entitiesAt(this.ms.locationId).filter(e => e !== "player");
+  /* ---------------- StageIntrospect ----------------
+   * The single source of truth for the verb namespace. Both the
+   * ActionSurface buttons and scripts/explore-stage.mjs read from
+   * availableVerbs(); invokeVerb routes the chosen verb back into
+   * beforePrompt as a synthesised player message so all state changes
+   * flow through the normal lifecycle.
+   * ------------------------------------------------- */
 
-    // Movement verbs.
+  availableVerbs(): VerbDescriptor[] {
+    if (this.isProcessing) return [];
+    const out: VerbDescriptor[] = [];
+    const exits = world.exitsFrom(this.ms.locationId);
+    const roomEntities = world.entitiesAt(this.ms.locationId).filter((e) => e !== "player");
+
     for (const [dir, exit] of Object.entries(exits)) {
       const target = world.getRoom(exit.to);
-      verbs.push({
-        id: `go-${dir}`,
+      out.push({
+        name: `go-${dir}`,
         label: `Go ${dir} → ${target?.name ?? exit.to}`,
-        enabled: !this.isProcessing,
-        onClick: () => {
-          // Handled via beforePrompt; we synthesise a message.
-          this.isProcessing = true;
-        },
-        hint: `Move ${dir} to ${target?.name ?? exit.to}`,
+        description: `Move ${dir} to ${target?.name ?? exit.to}`,
+        group: "move",
       });
     }
-
-    // NPC interaction verbs.
-    for (const npcId of roomEntities.filter(e => NPC_IDS.has(e))) {
+    for (const npcId of roomEntities.filter((e) => NPC_IDS.has(e))) {
       const npc = NPCS[npcId];
       if (!npc) continue;
-      verbs.push({
-        id: `talk-${npcId}`,
+      out.push({
+        name: `talk-${npcId}`,
         label: `Talk to ${npc.name}`,
-        enabled: !this.isProcessing,
-        onClick: () => { /* wired via Chub message flow */ },
-        hint: `Speak with ${npc.name}`,
+        description: `Speak with ${npc.name}.`,
+        group: "talk",
       });
     }
-
-    // Item verbs (only room items not carried by player).
-    for (const itemId of roomEntities.filter(e => ITEM_IDS.has(e))) {
+    for (const itemId of roomEntities.filter((e) => ITEM_IDS.has(e))) {
       const item = ITEMS[itemId];
       if (!item) continue;
       const held = this.ms.inventory.includes(itemId);
-      verbs.push({
-        id: `examine-${itemId}`,
+      out.push({
+        name: `examine-${itemId}`,
         label: `Examine ${item.name}`,
-        enabled: !this.isProcessing,
-        onClick: () => { /* wired via Chub message flow */ },
+        group: "item",
       });
       if (!held) {
-        verbs.push({
-          id: `take-${itemId}`,
+        out.push({
+          name: `take-${itemId}`,
           label: `Take ${item.name}`,
-          enabled: !this.isProcessing,
-          onClick: () => { /* wired via Chub message flow */ },
+          group: "item",
         });
       }
     }
+    out.push({
+      name: "look",
+      label: "Look around",
+      description: "Describe the current location.",
+      group: "observe",
+    });
+    out.push({
+      name: "freeform",
+      label: "Freeform input",
+      description: "Send any prose; routed through the freeform pipeline.",
+      args: [{ name: "text", type: "string", required: true, description: "What you say or do." }],
+      group: "freeform",
+    });
+    return out;
+  }
 
-    return verbs;
+  describe(): StageDescriptor {
+    const location = world.getRoom(this.ms.locationId);
+    const roomEntities = world.entitiesAt(this.ms.locationId).filter((e) => e !== "player");
+    const presentNpcs = roomEntities.filter((e) => NPC_IDS.has(e)).map((id) => NPCS[id]?.name ?? id);
+    const roomItems = roomEntities.filter((e) => ITEM_IDS.has(e)).map((id) => ITEMS[id]?.name ?? id);
+    const inv = this.ms.inventory.map((id) => ITEMS[id]?.name ?? id);
+    const verbs = this.availableVerbs();
+    return {
+      summary:
+        `Location: ${location?.name ?? this.ms.locationId}. ` +
+        `Turn ${this.ms.turnCount}. ` +
+        `Present: ${presentNpcs.length ? presentNpcs.join(", ") : "no one"}. ` +
+        `Items here: ${roomItems.length ? roomItems.join(", ") : "none"}. ` +
+        `Inventory: ${inv.length ? inv.join(", ") : "empty"}.`,
+      details: {
+        locationId: this.ms.locationId,
+        turnCount: this.ms.turnCount,
+        presentNpcIds: roomEntities.filter((e) => NPC_IDS.has(e)),
+        roomItemIds: roomEntities.filter((e) => ITEM_IDS.has(e)),
+        inventory: this.ms.inventory,
+        relations: this.ms.relations,
+        flags: this.ms.flags,
+        lastProse: this.ms.lastProse,
+      },
+      verbCount: verbs.length,
+    };
+  }
+
+  async invokeVerb(name: string, args?: Record<string, unknown>): Promise<InvocationResult> {
+    const text = verbToPlayerText(name, args);
+    if (text == null) {
+      return { ok: false, error: `unknown verb "${name}"` };
+    }
+    const msg: Message = {
+      anonymizedId: "0",
+      content: text,
+      isBot: false,
+      promptForId: "1",
+      identity: "12345",
+      isMain: true,
+    };
+    try {
+      const resp = await this.beforePrompt(msg);
+      return {
+        ok: resp?.error == null,
+        message: text,
+        prose: this.currentProse,
+        error: resp?.error ?? undefined,
+        messageState: resp?.messageState,
+        chatState: resp?.chatState,
+      };
+    } catch (err) {
+      const e = err as Error;
+      return { ok: false, error: `beforePrompt threw: ${e.message}` };
+    }
+  }
+
+  /** Render-side wrapper: derive button entries from availableVerbs and
+   *  wire each onClick to invokeVerb. */
+  private deriveVerbs(): VerbEntry[] {
+    const verbs = this.availableVerbs();
+    return verbs
+      .filter((v) => v.name !== "freeform") // freeform is the text input, not a button
+      .map((v) => ({
+        id: v.name,
+        label: v.label ?? v.name,
+        enabled: v.enabled !== false && !this.isProcessing,
+        hint: v.description,
+        onClick: () => { void this.invokeVerb(v.name); },
+      }));
   }
 
   render(): ReactElement {
@@ -669,17 +792,15 @@ export class WorldPrimaryStage extends StageBase<WorldInitState, WorldChatState,
             style={{ flex: 1, minHeight: 0 }}
           />
 
-          {/* Freeform input — wired to beforePrompt via Chub message flow */}
+          {/* Freeform input — routes through StageIntrospect.invokeVerb,
+              which synthesises a Message and calls beforePrompt directly.
+              In a Chub-hosted deploy, this duplicates the chat box; here
+              it gives the stage a self-contained input path (also used by
+              scripts/explore-stage.mjs via the "freeform" verb). */}
           <FreeformInput
             disabled={this.isProcessing}
             placeholder="Or type anything…"
-            onSubmit={(_text) => {
-              // In a Chub stage the player's message routes through Chub's
-              // chat box → beforePrompt. The FreeformInput here is a UI
-              // affordance whose submit the stage author would wire to
-              // Chub's message injection API (not available in this adapter).
-              // For the dev runner, the text box is functional via beforePrompt.
-            }}
+            onSubmit={(text) => { void this.invokeVerb("freeform", { text }); }}
             style={{ flexShrink: 0 }}
           />
         </div>
