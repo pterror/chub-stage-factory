@@ -23,7 +23,8 @@
     "deploy:delegator": "node scripts/deploy-delegator.mjs",
     "test": "vitest run",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check-deploy": "node scripts/check-deploy.mjs"
   },
   "dependencies": {
     "@chub-ai/stages-ts": "^0.3.7",

@@ -5,6 +5,13 @@ import { getExample } from "../../examples/registry";
 import type { DelegatorConfigComposed, LayoutKind } from "./types";
 import { mergeComposedResponses } from "./merge";
 import { CompositionLayout } from "../lib/ui/CompositionLayout";
+import {
+  hasIntrospect,
+  type StageIntrospect,
+  type VerbDescriptor,
+  type StageDescriptor,
+  type InvocationResult,
+} from "../lib/introspect";
 
 /**
  * CompositionRunner — helper that manages a set of child StageBase instances
@@ -187,5 +194,91 @@ export class CompositionRunner {
         node: this.children.get(id)!.render(),
       })),
     });
+  }
+
+  /* -------------------- StageIntrospect (fan-out) -------------------- *
+   * The runner implements StageIntrospect when ANY child does. Child
+   * verb names are namespaced by instance id ("<id>:<name>") so they
+   * don't collide. Children that do not implement StageIntrospect
+   * contribute zero verbs but still appear in describe() output.
+   *
+   * Per INTROSPECT.md: invokeVerb routes through the child's beforePrompt
+   * (because the child's invokeVerb implementation must do so).
+   * ------------------------------------------------------------------ */
+
+  /** True when at least one child implements StageIntrospect. */
+  hasIntrospectableChild(): boolean {
+    for (const id of this.instanceIds) {
+      if (hasIntrospect(this.children.get(id))) return true;
+    }
+    return false;
+  }
+
+  availableVerbs(): VerbDescriptor[] {
+    const out: VerbDescriptor[] = [];
+    for (const id of this.instanceIds) {
+      const child = this.children.get(id);
+      if (!hasIntrospect(child)) continue;
+      for (const v of child.availableVerbs()) {
+        out.push({
+          ...v,
+          name: `${id}:${v.name}`,
+          group: v.group ?? id,
+        });
+      }
+    }
+    return out;
+  }
+
+  describe(): StageDescriptor {
+    const lines: string[] = [];
+    const details: Record<string, unknown> = {};
+    let verbCount = 0;
+    for (const id of this.instanceIds) {
+      const child = this.children.get(id);
+      if (hasIntrospect(child)) {
+        const d = (child as StageIntrospect).describe();
+        lines.push(`[${id}] ${d.summary}`);
+        details[id] = d.details ?? null;
+        verbCount += d.verbCount ?? (child as StageIntrospect).availableVerbs().length;
+      } else {
+        lines.push(`[${id}] (no introspect)`);
+        details[id] = null;
+      }
+    }
+    return {
+      summary: lines.join("\n"),
+      details,
+      verbCount,
+    };
+  }
+
+  async invokeVerb(
+    name: string,
+    args?: Record<string, unknown>,
+  ): Promise<InvocationResult> {
+    const sep = name.indexOf(":");
+    if (sep <= 0) {
+      return { ok: false, error: `composed verb "${name}" must be "<instanceId>:<verb>"` };
+    }
+    const id = name.slice(0, sep);
+    const inner = name.slice(sep + 1);
+    const child = this.children.get(id);
+    if (!child) {
+      return { ok: false, error: `unknown instance id "${id}"` };
+    }
+    if (!hasIntrospect(child)) {
+      return { ok: false, error: `instance "${id}" does not implement StageIntrospect` };
+    }
+    const result = await (child as StageIntrospect).invokeVerb(inner, args);
+    // Mirror state into the runner's caches so subsequent setState calls
+    // fall back correctly.
+    if (result.messageState !== undefined) {
+      this.lastMessageState[id] = result.messageState;
+    }
+    if (result.chatState !== undefined) {
+      this.lastChatState[id] = result.chatState;
+    }
+    return result;
   }
 }

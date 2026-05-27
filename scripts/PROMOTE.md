@@ -50,3 +50,14 @@ In the promoted repo, set the env vars and run:
 ```sh
 STAGE_ID=<your-stage-id> CHUB_AUTH_TOKEN=<token> bun run deploy
 ```
+
+## Checking deploy status
+
+From the factory or a promoted repo with `gh` configured:
+
+```sh
+bun run check-deploy          # pretty-prints latest 5 deploy.yml runs
+node scripts/check-deploy.mjs # run directly
+```
+
+Exit codes: 0 = latest succeeded, 1 = failed, 2 = in progress, 3 = no runs found.

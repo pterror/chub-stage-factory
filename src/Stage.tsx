@@ -6,6 +6,12 @@ import type {ExampleName} from "../examples/registry";
 import type {DelegatorConfigComposed} from "./composition/types";
 import {parseComposedInstances} from "./composition/types";
 import {CompositionRunner} from "./composition/CompositionRunner";
+import {
+    hasIntrospect,
+    type VerbDescriptor,
+    type StageDescriptor,
+    type InvocationResult,
+} from "./lib/introspect";
 
 /***
  DelegatorConfig — discriminated union over registered example names.
@@ -94,5 +100,30 @@ export class Stage extends StageBase<any, any, any, DelegatorConfig> {
     render(): ReactElement {
         if (this.runner) return this.runner.render();
         return this.inner!.render();
+    }
+
+    /* ---------------- StageIntrospect delegation ---------------- *
+     * Forwards to the inner stage (single mode) or the runner
+     * (composed mode) when introspection is available. The delegator
+     * itself exposes the methods as opt-in: callers can structurally
+     * check with hasIntrospect(stage).
+     * ----------------------------------------------------------- */
+
+    availableVerbs(): VerbDescriptor[] {
+        if (this.runner) return this.runner.availableVerbs();
+        if (this.inner && hasIntrospect(this.inner)) return this.inner.availableVerbs();
+        return [];
+    }
+
+    describe(): StageDescriptor {
+        if (this.runner) return this.runner.describe();
+        if (this.inner && hasIntrospect(this.inner)) return this.inner.describe();
+        return { summary: "(stage does not implement StageIntrospect)", verbCount: 0 };
+    }
+
+    async invokeVerb(name: string, args?: Record<string, unknown>): Promise<InvocationResult> {
+        if (this.runner) return this.runner.invokeVerb(name, args);
+        if (this.inner && hasIntrospect(this.inner)) return this.inner.invokeVerb(name, args);
+        return { ok: false, error: "stage does not implement StageIntrospect" };
     }
 }

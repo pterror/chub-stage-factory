@@ -76,13 +76,16 @@ Driven by `/build-stage`, which invokes `/loop` (self-paced). Each iteration:
 
 1. Read `DESIGN.md` and `STATUS.md` (creating `STATUS.md` on first run).
 2. Pick the next unchecked item from `STATUS.md`'s task list, or generate the task list if empty.
-3. Implement it. Edit `src/Stage.tsx`, `src/TestRunner.tsx`, `public/chub_meta.yaml`, etc.
-4. Run `yarn build` to verify it typechecks and compiles. Fix errors before moving on.
-5. Commit with a conventional message. Push.
-6. Update `STATUS.md` (mark done, note blockers).
-7. End the iteration. The loop schedules the next.
+3. Print a progress marker to stdout: `[loop] step N/M: <task name>` (e.g. `[loop] step 3/8: implement beforePrompt`). This lets the user track progress without reading STATUS.md between iterations.
+4. Implement it. Edit `src/Stage.tsx`, `src/TestRunner.tsx`, `public/chub_meta.yaml`, etc.
+5. Run `bun run build` to verify it typechecks and compiles. Fix errors before moving on.
+6. Commit with a conventional message. Push.
+7. Update `STATUS.md` (mark done, note blockers, update the step count if it changed).
+8. End the iteration. The loop schedules the next.
 
 Exit the loop when `STATUS.md` shows all tasks complete and the latest push passed the deploy workflow.
+
+**Checking loop progress:** `STATUS.md` is the authoritative log — open it any time to see which tasks are done, in-progress, or blocked. The `[loop] step N/M` markers in the Claude Code transcript give a live position. To check deploy status after a push: `bun run check-deploy`.
 
 ## Chub stage API
 
@@ -151,10 +154,10 @@ Auto-filled by the deploy workflow on first push, do not write yourself:
 ## Local dev
 
 ```sh
-nix develop          # provides node@21.7.1 + yarn (via flake)
-yarn install
-yarn dev             # http://localhost:5173, runs src/TestRunner.tsx
-yarn build           # tsc + vite build → dist/
+nix develop          # provides node@21.7.1 + bun (via flake; bun is required, yarn is unsupported)
+bun install
+bun run dev          # http://localhost:5173, runs src/TestRunner.tsx
+bun run build        # tsc + vite build → dist/
 ```
 
 `src/TestRunner.tsx` is the dev harness — it instantiates the Stage with `src/assets/test-init.json` because there is no real chat UI locally. Update the test data as the design evolves.
@@ -187,7 +190,7 @@ Curated for pattern coverage. Read the one closest to what you're building befor
 ## Hard rules for Phase 2
 
 - Don't ask the user questions. If `DESIGN.md` is ambiguous, make a reasonable choice and note it in `STATUS.md` under "decisions made autonomously".
-- Don't skip `yarn build`. A broken build wastes a deploy cycle.
+- Don't skip `bun run build`. A broken build wastes a deploy cycle.
 - Don't `--no-verify` anything.
 - Don't commit `node_modules/`, `dist/`, or anything in `.gitignore`.
 - Commit per logical chunk, not per file. Conventional commit messages.

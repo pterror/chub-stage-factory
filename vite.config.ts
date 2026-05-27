@@ -58,7 +58,8 @@ export default defineConfig(({ mode }) => {
         }
     } else {
         return {
-            plugins: [react()]
+            plugins: [react()],
+            ...(process.env.VITE_PUBLIC_DIR ? { publicDir: process.env.VITE_PUBLIC_DIR } : {}),
         }
     }
 });

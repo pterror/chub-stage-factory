@@ -16,7 +16,6 @@
           buildInputs = with pkgs; [
             stdenv.cc.cc
             nodejs_latest
-            yarn
             bun
           ];
           LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath buildInputs}:$LD_LIBRARY_PATH";
