@@ -75,38 +75,59 @@ export class InventoryStage extends withPersistence<ChatStateType, InitStateType
 
   render(): ReactElement {
     const { inv, tick } = this.p;
-    const rows: { spot: string; items: { name: string; count: number; access: number }[] }[] = [];
+
+    // Map spot ids to player-readable location labels.
+    const SPOT_LABELS: Record<string, string> = {
+      counter: "Counter",
+      "under-counter": "Under the counter",
+      "hanging-hook": "Hanging hook",
+      "back-room": "Back room",
+      "pak-pocket": "Pak's pocket",
+    };
+
+    // Map accessibility score (0–1) to a brief availability hint.
+    function reachHint(a: number): string {
+      if (a >= 0.8) return "within reach";
+      if (a >= 0.5) return "buried a little";
+      if (a >= 0.2) return "hard to find";
+      return "buried deep";
+    }
+
+    const rows: { spot: string; label: string; items: { name: string; count: number; hint: string }[] }[] = [];
     for (const spot of inv.spots()) {
       rows.push({
         spot,
+        label: SPOT_LABELS[spot] ?? spot,
         items: inv.contents(spot).map((st: Stack) => ({
           name: inv.getDef(st.defId)?.displayName ?? st.defId,
           count: st.count,
-          access: Number(inv.accessibility(st.defId, spot, tick.n).toFixed(2)),
+          hint: reachHint(inv.accessibility(st.defId, spot, tick.n)),
         })),
       });
     }
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Pak&apos;s stall — tick {tick.n}</h3>
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
-          <thead><tr><th align="left">spot</th><th align="left">contents</th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.spot} style={{ borderTop: "1px solid #333" }}>
-                <td style={{ padding: "4px 8px", verticalAlign: "top" }}>{r.spot} <span style={{ opacity: 0.5 }}>(d={(inv.meta(r.spot)?.disorder ?? 0).toFixed(2)})</span></td>
-                <td style={{ padding: "4px 8px" }}>
-                  {r.items.length === 0 ? <em style={{ opacity: 0.5 }}>empty</em> :
-                    r.items.map((it) => (
-                      <span key={it.name} style={{ marginRight: 12 }}>
-                        {it.name}{it.count > 1 ? `×${it.count}` : ""} <span style={{ opacity: 0.5 }}>[a={it.access}]</span>
-                      </span>
+      <div style={{ padding: 12, fontFamily: "sans-serif", color: "#ddd", background: "#1a1a1a", maxWidth: 480 }}>
+        <h3 style={{ marginTop: 0, fontSize: "1rem", color: "#e8c97a" }}>Pak&apos;s Stall</h3>
+        {rows.map((r) => {
+          const visibleItems = r.items.filter((it) => it.name !== "Pak's ledger" || r.spot !== "pak-pocket");
+          return (
+            <div key={r.spot} style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: "0.75rem", color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>{r.label}</div>
+              {visibleItems.length === 0
+                ? <div style={{ color: "#555", fontStyle: "italic", fontSize: "0.9rem" }}>Nothing here.</div>
+                : <ul style={{ margin: 0, paddingLeft: 18 }}>
+                    {visibleItems.map((it) => (
+                      <li key={it.name} style={{ fontSize: "0.9rem", marginBottom: 2 }}>
+                        {it.name}{it.count > 1 ? ` ×${it.count}` : ""}
+                        <span style={{ color: "#777", fontSize: "0.8rem", marginLeft: 6 }}>({it.hint})</span>
+                      </li>
                     ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  </ul>
+              }
+            </div>
+          );
+        })}
       </div>
     );
   }
