@@ -911,6 +911,459 @@ When to use: any stage wanting unified state threading across all LLM calls; pre
 
 ---
 
+## 7. Physics
+
+For "did the bullet hit the wall" / "can the player move here" / soft-body
+particles. Not a physics engine; enough for stage-level checks. The
+`physicsPattern` helper pre-indexes static obstacles into a `SpatialHash` and
+returns a `simulate` helper for bounded projectile traces.
+
+```ts
+import { physicsPattern } from "./lib/patterns/physics";
+
+const p = physicsPattern({
+  obstacles: [
+    { id: "north-wall", aabb: { x: 0, y: 100, w: 200, h: 8 } },
+    { id: "door-frame", aabb: { x: 90, y: 0, w: 8, h: 100 } },
+  ],
+});
+
+// Trace a projectile (returns hit list and final position):
+const result = p.simulate(ox, oy, vx, vy);
+
+// Or query the hash directly:
+const hits = p.hash.query(movedAABB);
+```
+
+When to use: any stage with positional collision — realtime combat (pair with
+recipe 6), dungeon tile movement, projectile tracing, soft-body particle
+chains. Also available as the `physicsPattern` extract composer:
+`src/lib/patterns/physics.ts`.
+
+---
+
+## 21. Dialogue — FSM with predicate-gated choices
+
+Predicate-gated state machine for structured conversation trees. States carry
+a `say` string and a `choices` list; each choice has an optional
+`Predicate<S>` guard filtered at display time.
+
+```ts
+import { dialoguePattern } from "./lib/patterns/dialogue";
+
+const d = dialoguePattern({
+  states: [
+    { id: "intro", say: "Who are you?", choices: [
+      { id: "friend", label: "A friend.", next: "trust" },
+      { id: "enemy",  label: "Your enemy.", next: "combat" },
+    ]},
+    { id: "trust",   say: "Then come in.", choices: [] },
+    { id: "combat",  say: "Guards!",       choices: [] },
+  ],
+  initial: "intro",
+});
+
+// Display filtered choices to the player:
+const visible = d.availableChoices(gameState, refs, resolvers);
+// Advance the FSM:
+const nextSay = d.choose("friend", extraData);
+```
+
+When to use: Zork-shape (#2), any NPC with branching conversation that must
+respect world-state conditions (reputation gate, item requirement, tag check).
+Pair with `factionPattern` to gate choices on standing.
+
+---
+
+## 22. Score — stat + tier-based unlocks
+
+Named `Stat` bundled with a `Timeline` of score events and a list of
+`ScoreUnlock` entries. Unlocks fire when the tier threshold is newly crossed.
+
+```ts
+import { scorePattern } from "./lib/patterns/score";
+
+const s = scorePattern({
+  name: "karma",
+  tiers: [{ label: "neutral", min: 0 }, { label: "hero", min: 100 }],
+  unlocks: [{ tier: "hero", reward: { id: "blessing", kind: "tag-grant" } }],
+});
+
+s.award(10, "saved the orphan", now);      // increments + records event
+const tier = s.tier();                      // "neutral" | "hero"
+const newUnlocks = s.check();              // any newly crossed thresholds
+```
+
+When to use: karma/morality systems, achievement progression, leaderboard
+stages (Zork-shape #2 points), any "unlock X when score crosses Y" mechanic.
+Pair with `factionPattern` when reputation is faction-specific.
+
+---
+
+## 23. Faction — per-faction reputation with content gates
+
+One `Stat` per faction plus a `gate(factionId, tier, state, refs)` predicate
+constructor. Content is gated by calling `gate` and evaluating the result.
+
+```ts
+import { factionPattern } from "./lib/patterns/faction";
+
+const f = factionPattern({
+  factions: [
+    { id: "guild", tiers: [{ label: "hostile", min: -100 }, { label: "friendly", min: 50 }] },
+  ],
+});
+
+f.adjust("guild", +20);                    // mutates reputation stat
+const standing = f.tierOf("guild");        // "hostile" | "friendly"
+
+// Gate content on standing:
+const pred = f.gate("guild", "friendly", gameState, refs);
+// evaluate pred with the predicate DSL to decide whether to show content
+```
+
+When to use: LT-shape (#6), any multi-faction political stage. The `0c.
+Reputation / faction` note at the top of this file describes the design
+rationale. `factionPattern` is the assembled composer; prefer it over
+hand-rolling `Stat` + `tier()`.
+
+---
+
+## 24. Skit — PARC scene + observation + outcome resolution
+
+Composes `scenePattern` + `Actor` + `assembleObservations` into the PARC Skit
+ergonomic. One call produces a scene with its observation feed attached.
+
+```ts
+import { skitPattern } from "./lib/patterns/skit";
+
+const skit = skitPattern({
+  actors: [playerActor, npcActor],
+  actions: ACTION_DEFS,
+  stageDirections: STAGE_DIRECTIONS,
+});
+
+// On each turn, observation sources are pre-wired:
+const { sources, dispatch, resolveOutcome } = skit;
+```
+
+When to use: any stage that wants the full PARC Skit ergonomic
+(actor + scene + observation) without hand-assembling the three separately.
+The `src/lib/design/SCENE.md` authoring guide covers `SceneActionDef` defs;
+the skit pattern wires the plumbing.
+
+---
+
+## 25. Form — pilotable character entity (Wave 2D)
+
+Assembles a complete character-in-its-own-right from Body + Stats + abilities
++ aesthetics + lore. A Form is not a body delta; it is a pilotable entity with
+its own appearance, capabilities, and narrative identity.
+
+```ts
+import { formPattern } from "./lib/patterns/form";
+
+const frame = formPattern({
+  id: "excalibur",
+  body: new Body({ torso: ["human", "armored"] }),
+  stats: { strength: new Stat({ base: 80 }), speed: new Stat({ base: 60 }) },
+  abilities: [SLASH_DEF, RADIAL_BLIND_DEF],
+  aesthetics: { color: "#b8860b", silhouette: "tall" },
+  lore: "First Warframe. Blueprint from the Orokin era.",
+});
+```
+
+When to use: Warframe-shape (#9), any stage where multiple distinct
+"characters" exist as first-class pilotable objects rather than body-state
+deltas. Pair with `formCollectionPattern` and `puppetPattern`.
+
+---
+
+## 26. FormCollection — PlaceholderRegistry with unlock progression (Wave 2D)
+
+Wraps `PlaceholderRegistry<Form>` with an `unlock(id, form)` surface and
+pre-seeded placeholder stubs. Placeholders are visible immediately; real Forms
+swap in on unlock or procgen completion.
+
+```ts
+import { formCollectionPattern } from "./lib/patterns/form-collection";
+
+const collection = formCollectionPattern({
+  placeholders: ["volt", "mag", "ash"],   // stubs seeded immediately
+});
+
+// On acquisition:
+collection.unlock("volt", await generateForm("volt"));
+
+// Enumerate available forms:
+collection.list();        // returns resolved Forms only
+collection.listAll();     // includes pending placeholders
+```
+
+When to use: Warframe-shape (#9), any stage with a collect-and-unlock
+progression where content is generated lazily. Pairs with `graftingPattern`
+(recipe 27) and `puppetPattern` (recipe 28).
+
+---
+
+## 27. Grafting — Helminth-style ability transfer with provenance (Wave 2D)
+
+Ability subsume → inject pipeline with slot-lock enforcement and full
+`InjectionRecord` provenance tracking. Composes `Registry` +
+`PlaceholderRegistry`; persistence is the stage's responsibility via Shard.
+
+```ts
+import { graftingPattern } from "./lib/patterns/grafting";
+
+const helminth = graftingPattern({
+  forms: collection.registry,          // PlaceholderRegistry<Form>
+  learnedLibrary: ABILITY_REGISTRY,    // Registry<AbilityDef>
+  consumeOnSubsume: true,
+  helminthVersion: (def) => ({ ...def, damage: def.damage * 0.75 }),
+  slot4Lock: true,
+});
+
+helminth.hooks.subsume("excalibur", "radial-blind");
+helminth.hooks.inject({ sourceFormId: "excalibur", abilityId: "radial-blind",
+  targetFormId: "volt", configSlot: 1, abilitySlot: 2 });
+const configs = helminth.hooks.listInjected("volt");
+```
+
+When to use: Warframe-shape (#9) Helminth room, any stage with cross-character
+ability transfer + provenance. Ad-hoc return shape (no turn loop) — call hooks
+at player-action time, not each tick.
+
+---
+
+## 28. Puppet — actor piloting another actor (Wave 2D)
+
+The player's true-self `Actor` pilots a form `Actor`. True-self persists
+memory, inventory, and relationships; the form holds appearance, body, and
+abilities. `equip` / `unequip` switch the active form; `active` always
+resolves to the correct surface to show the LLM.
+
+```ts
+import { puppetPattern } from "./lib/patterns/puppet";
+
+const puppet = puppetPattern({
+  pilot: trueSelfActor,
+  forms: collection.registry,
+});
+
+puppet.equip("excalibur");     // switch active form
+const display = puppet.active; // form Actor if equipped, pilot Actor if not
+puppet.unequip();              // revert to bare true-self
+```
+
+When to use: Warframe-shape (#9), any stage where the player inhabits
+successive "shells" while maintaining a persistent inner identity. Pairs with
+`formCollectionPattern` and `graftingPattern`.
+
+---
+
+## 29. Managerial — policy-issue + report-rendering loop (Wave 2C)
+
+Player issues typed policy directives; each tick the subsystem renders a prose
+report from `Timeline` events via `Timeline.summarize`. Enables the
+"arcology manager" ergonomic of FC-shape.
+
+```ts
+import { managerialPattern } from "./lib/patterns/managerial";
+
+const mgr = managerialPattern({
+  policyFields: POLICY_SCHEMA,    // typed fields the player can set
+  timeline,
+  actors: pool,
+});
+
+// On player directive:
+mgr.applyPolicy({ productionTarget: "food", laborQuota: 0.6 });
+
+// After bulkTick (recipe 8):
+const report = mgr.renderReport(tickEvents, now);
+// Surface report as stageDirections; let LLM narrate.
+```
+
+When to use: FC-shape (#8), FS-shape, any stage where the player sets
+high-level policy and receives turn reports rather than issuing individual
+actions. Pair with `bulkTickPattern` (recipe 8) — managerial renders what
+bulk-tick produced.
+
+---
+
+## 30. Sandbox — free-roam open-world turn loop
+
+Full open-world composer: world + actor + intent parsing + procgen. One call
+per player turn handles scope, intent, look, and move.
+
+```ts
+import { sandboxPattern } from "./lib/patterns/sandbox";
+
+const sb = sandboxPattern({
+  world, pool, procgen, intentParser,
+  includeCarried: true,
+});
+
+// Each turn:
+const scope  = sb.scope(playerId);
+const intent = await sb.parseIntent(playerText, playerId);
+const desc   = sb.look(playerId);
+if (intent.kind === "move") sb.move(playerId, intent.destination);
+```
+
+When to use: CoC-shape (#4), LT-shape (#6), any exploration stage without a
+fixed scene flow. If the player IS the subject rather than the explorer, use
+`subjectSandboxPattern` (recipe 16) instead.
+
+---
+
+## 31. WorldExploration — parser-IF turn loop
+
+Classic parser-IF: deterministic grammar → LLM fallback on miss. Scope,
+intent, look, move — same surface as sandbox but with an explicit grammar
+layer and `look` returning formatted room + entity list + visible exits.
+
+```ts
+import { worldExplorationPattern } from "./lib/patterns/world-exploration";
+
+const we = worldExplorationPattern({ world, pool, grammar: GRAMMAR_DEFS });
+
+const scope  = we.scope(playerId);
+const intent = await we.parseIntent(playerText, playerId); // grammar first
+const look   = we.look(playerId);                           // formatted description
+```
+
+When to use: Zork-shape (#2), any stage where a deterministic grammar should
+handle standard verbs (take, drop, examine, go N) and the LLM only sees
+failures. If open-world with no grammar, use `sandboxPattern` (recipe 30).
+
+---
+
+## Synergy patterns (Wave 2I)
+
+Synergy patterns are `ComposedSubsystem`-shaped composers that plug into
+`LlmPipelineRunner`. They do not have their own tick loop; the pipeline calls
+their `hooks.beforePrompt` / `hooks.afterResponse` for you. See
+`src/lib/LLM-PIPELINE.md` for wiring and `src/lib/patterns/synergy/types.ts`
+for the `ComposedSubsystem<S>` shape.
+
+Each pattern below is one paragraph: what it does and when to reach for it.
+
+**`cacheByKey`** — LLM output cached by structural id (AID Story Card
+pattern). Once generated for a key, the same payload is served from cache on
+every future activation. Reach for it when content is invented mid-session and
+must be consistent on revisit (cyberware defs, NPC lore, procgen room
+descriptions). Pairs with `generativeRegistry` (recipe 9).
+
+**`characterFilteredActivation`** — context entry activates only when a
+specific character is in focus (SillyTavern WI Character Filter). Reach for it
+when stage has multiple NPCs whose lore entries should only inject when that
+NPC is actively present in the scene.
+
+**`fallbackChain`** — deterministic grammar first; LLM fallback on grammar
+miss. Reach for it when intent parsing must be fast for standard verbs but
+graceful for novel phrasing. The pattern wraps both layers and appends a
+second LLM call only on failure. See also `worldExplorationPattern` (recipe
+31) which embeds this chain.
+
+**`forceActivateWithBudgetCap`** — always-on context section with a hard token
+cap (NovelAI Force Activation). Reach for it when a section must appear in
+every prompt but must not crowd out dynamic content. Mitigates
+`budget-poisoning`.
+
+**`hierarchicalSummarization`** — per-actor mini-reports merged into a single
+executive summary. Reach for it when `managerialPattern` (recipe 29) tick
+reports grow long: each actor produces a one-liner, the pattern collapses them.
+
+**`inclusionGroupMutex`** — mutually exclusive activation groups (SillyTavern
+Inclusion Groups). Reach for it when multiple context entries should never
+co-activate; prevents `key-collision` anti-pattern.
+
+**`llmConstrainedByProcgen`** — procgen lays a structured skeleton; LLM fills
+prose into the slots. Reach for it when output must satisfy structural
+constraints (scene beats, stat rolls, spatial layout) but prose is LLM's.
+
+**`llmNarratesProgrammaticTracks`** — procgen owns the event/goal list; LLM
+narrates. Reach for it when mechanical events are deterministic but their
+prose rendering should be expressive (AID Scripting pattern).
+
+**`overrideSlots`** — SillyTavern Main-Prompt / System-Prompt override
+surface. Reach for it when a stage needs to replace (not append) the base
+system prompt for a sub-scene without touching the pipeline's main prompt.
+
+**`positionalInjectionDepth`** — inject a context entry at a specific position
+in the message history (SillyTavern WI depth field). Reach for it when
+recency of a fact matters more than its static priority; memory "fades" as it
+moves further from the current turn.
+
+**`procgenValidatesLlm`** — LLM proposes a value; deterministic validator
+accepts or rejects with a reason; rejected proposals re-prompt with the failure
+appended. Reach for it when LLM output must satisfy hard constraints
+(valid item id, legal move, schema).
+
+**`programmaticNarratesLlmDecides`** — LLM picks from a constrained action
+menu; prose describes the choice. Reach for it when you want LLM agency over
+*which* action but deterministic resolution of *what it does* (AID output-
+modifier pattern).
+
+**`quietGenerationSubCall`** — hidden LLM sub-call whose output is injected
+into context before the main generation (SillyTavern Quiet Mode). Reach for it
+when you need LLM-extracted structured data (intent, tags, entity list) without
+exposing the extraction call in the visible message.
+
+**`recencyFrequencyEviction`** — AID Story Card prioritization: entries scored
+by recency of activation + frequency of match, lowest-scored evicted when
+budget is tight. Reach for it when the context has a large WI catalog and
+needs principled eviction rather than FIFO.
+
+**`recursiveKeyExpansion`** — a WI entry's activation triggers evaluation of
+its own body for further keys (SillyTavern WI recursion). Reach for it when
+lore entries cross-reference each other and you want transitive activation.
+
+**`scheduledSelfCheck`** — periodic LLM self-check on a Scheduler tick:
+"does current state satisfy objective?" Returns a boolean + reason.
+Reach for it when a stage needs autonomous goal tracking without per-turn
+inference overhead.
+
+**`scriptedQuickReplyMacro`** — SillyTavern STScript / Quick Reply macro
+runner. Executes a scripted sequence of stage directives as a single player
+action. Reach for it when a stage has power-user shortcuts that chain multiple
+mechanical effects.
+
+**`seedFromPlayer`** — LLM extracts a structured seed/spec from freeform
+player character-creation prose, then the stage uses the seed to bootstrap
+procgen. Reach for it at stage init when player input is the source of truth
+for world parameters.
+
+**`semanticRecallOverlay`** — vector-similarity recall over Timeline events
+(SillyTavern Vector Storage). Reach for it when timeline is long and only
+thematically relevant events should surface; replaces recency-only windowing.
+
+**`stickyCooldownDelayTimers`** — SillyTavern WI Timed Effects: sticky entries
+that expire after N turns, delay entries that activate after M turns. Reach for
+it when temporary conditions (status effects, scene beats) should appear in
+context for exactly the right window.
+
+**`subcontextGroupBudgeting`** — NovelAI Subcontext composer: assigns per-group
+token budgets before `ContextAssembler` runs. Reach for it as the primary
+mitigation for `budget-poisoning` when multiple subsystems compete for context
+space.
+
+**`triplehookPipeline`** — convenience wrapper for `LlmPipelineRunner` that
+pre-wires the AID triple-hook shape (input modifier → context → output
+modifier). Reach for it when the stage's pipeline matches that canonical shape
+exactly, to avoid writing the wiring by hand.
+
+---
+
+## Return shapes
+
+Three composer return shapes coexist across the library. See
+[`RETURN-SHAPES.md`](./patterns/RETURN-SHAPES.md) for the discriminant: when
+to use `*Bundle`, `ComposedSubsystem<S>`, or ad-hoc.
+
+---
+
 ## Anti-patterns
 
 ### `budget-poisoning`
@@ -925,43 +1378,3 @@ Multiple context entries or cache keys share a prefix or overlapping regex, caus
 
 **Mitigation:** use `inclusionGroupMutexPattern` to declare mutually exclusive activation groups, and prefer `kind: "glob"` or `kind: "regex"` predicate kinds (Wave 2I additions to `predicate.ts`) over loose string-prefix matching so match boundaries are explicit.
 
----
-
-## 7. Physics
-
-For "did the bullet hit the wall" / "can the player move here" / soft-body
-particles. Not a physics engine; enough for stage-level checks.
-
-```ts
-import { AABB, Circle, SpatialHash, aabbOverlap, resolvePositional, verletStep } from "./lib/physics";
-
-walls: AABB[] = [
-  { x: 0, y: 100, w: 200, h: 8 },
-  { x: 90, y: 0, w: 8, h: 100 },
-];
-hash = new SpatialHash<AABB>(32);
-
-async load() {
-  for (const w of this.walls) this.hash.insert(w, w);
-  return { success: true, initState: null, chatState: null };
-}
-
-tryMove(player: AABB, dx: number, dy: number): AABB {
-  const moved: AABB = { ...player, x: player.x + dx, y: player.y + dy };
-  const hits = this.hash.query(moved);
-  for (const w of hits) {
-    if (!aabbOverlap(moved, w)) continue;
-    const adj = resolvePositional(moved, w);
-    moved.x += adj.ax;
-    moved.y += adj.ay;
-  }
-  return moved;
-}
-
-// Verlet particle (e.g. a tail tip):
-tailTip = { p: { x: 0, y: 0 }, prev: { x: 0, y: 0 } };
-tickTail(dt: number) {
-  const next = verletStep(this.tailTip.p, this.tailTip.prev, { x: 0, y: 200 }, dt, 0.05);
-  this.tailTip = next;
-}
-```
