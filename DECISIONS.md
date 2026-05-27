@@ -186,6 +186,45 @@ surfaced errors, disable rules only where the pattern is structural and judgment
   `hoverConfig`/`entryConfig` wrapping in `useMemo` deferred to avoid changing animation
   behaviour in this pass).
 
+## 13. Composer build pass — 33 composers + world primitive (2026-05-27)
+
+### Summary
+
+Six parallel agent batches shipped 33 composer files + `src/lib/world.ts`. No TSC errors were present at reconciliation time — `bun run build`, `bun run lint`, `bun run test`, and `bun run test:smoke` all passed cleanly. Agents reported "pre-existing TSC errors in files written by other concurrent agents" during development, but these resolved by the time the branches were merged; no agent-introduced type errors survived into the final tree.
+
+### LOC totals
+
+| Group | Files | LOC |
+|-------|-------|-----|
+| `src/lib/world.ts` | 1 | 360 |
+| `src/lib/patterns/*.ts` (28 composers, excl. scene/freeform/render-trigger) | 28 | ~4247 |
+| `src/lib/patterns/synergy/*.ts` (8 new patterns) | 8 | ~1767 total for all 22 synergy files |
+| Total new composer + primitive LOC | ~39 files | ~6374 |
+
+### Extracted vs newly built
+
+**Extracted** (lifted from existing examples into dedicated pattern files):
+`inventory.ts`, `effects.ts`, `turn-combat.ts`, `body-transformation.ts` — these were inline in the example stages; the batch extracted them to `src/lib/patterns/` without changing behavior.
+
+**Newly built** (net-new pattern files, no prior implementation):
+All other 29 composers — cyber-slots, physics, realtime-combat, dialogue, score, faction, skit, lineage, bulk-tick, managerial, form, form-collection, grafting, puppet, daily-vignette, sandbox, world-exploration, subject-sandbox, slot-assignment, spatial-propagation, and the 8 synergy patterns.
+
+### Three batch-2b synthesis flag resolutions
+
+**1. `grafting.ts` `subsume` semantics** — GRAFTING.md is unambiguous: `subsume` permanently adds a form's ability to the learned library; it is *not* a learn-from-scratch operation. The implementation in `grafting.ts` matches: `subsume(formId, abilityId)` checks the form exists (non-placeholder) and registers the ability in `learnedLibrary`. It does not extract the ability from the form object; the caller is expected to have already seeded `learnedLibrary` with the `AbilityDef`. This is documented in the JSDoc: "Mark as subsumed — noop if already present (subsume is idempotent)." No change needed; semantics confirmed.
+
+**2. `managerial.ts` ↔ `bulk-tick.ts` signature** — Batch 2b assumed `bulkTick` had shape `(pool, now, advance) => Event[]`. Actual `bulkTickPattern` shape is `BulkTickBundle<E>` with `tick(now?)` on the returned bundle; `processActor` is provided at construction time. `managerial.ts` was written with its own inline tick loop (`pool.forEach` over `init.advance`) rather than delegating to `bulkTickPattern`. This is architecturally correct: `managerial.ts` composes *over* the bulk-tick concept independently rather than depending on `bulk-tick.ts` as a peer. No API mismatch; no shim needed.
+
+**3. `form.ts` `effectiveDef` eager vs lazy** — `FormConfig.effectiveDef` in `grafting.ts` is populated eagerly at inject time (`helminthed = helminthVersion(abilityDef)` called immediately). GRAFTING.md does not prescribe lazy vs eager; the eager approach is simpler and sufficient because `helminthVersion` is a pure transform over an immutable `AbilityDef`. If a stage needs per-cast recomputation (e.g., scaling based on current stats), it calls `abilityScaling` at dispatch time, not `effectiveDef`. Decision: **eager** is correct; `effectiveDef` represents the grafted form at injection time, not at cast time.
+
+### What remains unimplemented or stubbed
+
+- `focusPattern` — not shipped; no `src/lib/patterns/focus.ts`. Still 💭 in ROADMAP.
+- `synergy/sliding-window-chat.ts` — not shipped; depends on `chat-window.ts` having callers.
+- Wave 2E game UI components (TileGrid, HexGrid, GraphView, ActorPanel, etc.) — pending.
+- Wave 2F physics/assets/camera-rigs — pending.
+- `freeformPipeline` `"extend"` policy — removed (was a TODO throw; see decision §4).
+
 ## N. `world-primary` not migrated to `world.ts` yet
 
 Wave 2B `world.ts` (graph of rooms + scope queries) was landed in 2026-05-27.

@@ -421,9 +421,130 @@ table and full example.
 - `localTransformerEmbeddings(modelName?): EmbeddingService` — transformers.js adapter (lazy-imported)
 - `apiEmbeddings({ endpoint, key? }): EmbeddingService` — HTTP adapter
 
+## `world.ts` — [WORLD.md](./WORLD.md) (Wave 2B)
+
+- `interface RoomInit { id, displayName?, description?, tags? }`
+- `interface ExitDef { direction, targetId, locked?, tags? }`
+- `class World`
+  - `addRoom(init): this`, `getRoom(id)`, `hasRoom(id)`
+  - `addExit(fromId, exit): this`
+  - `locate(actorId, roomId): this`, `locationOf(actorId): string | null`
+  - `move(actorId, direction): { ok: true; to: string } | { ok: false; reason: string }`
+  - `scope(actorId): string[]` — ids of rooms + actors visible from actor's location
+  - `exits(roomId): ExitDef[]`, `adjacent(roomId): string[]`
+  - `toJSON()`, `static fromJSON(data): World`
+- `worldResolvers(world): Resolvers` — predicate resolver shim for world-flag / located-at kinds
+
 ## `patterns/scene.ts` (Wave 2A)
 
 - `scenePattern(opts)` — composer wiring `scene.ts` primitive + `body.ts` + `actor.ts` + `tag-parser.ts`; the erotic-RPG scene resolver
+
+## `patterns/inventory.ts`
+
+- `inventoryPattern(opts)` — composes `Inventory` + `observation` + `chub-adapters` + prose-register snippet; standard item-management bundle
+
+## `patterns/effects.ts`
+
+- `effectsPattern(opts)` — composes `EffectStore` + `Stats` + `Scheduler` + `Timeline`; status-effect lifecycle with stat application and expiry
+
+## `patterns/turn-combat.ts`
+
+- `turnCombatPattern(opts)` — composes `Action` + `combat-turn` + `EffectStore` + `Stats` + `Rng` + `Timeline`; full turn-based combat loop
+
+## `patterns/realtime-combat.ts`
+
+- `realtimeCombatPattern(opts)` — composes `RealtimeWorld` + `physics` + `Scheduler` + `Rng` + `Timeline`; tick-driven projectile/collision combat
+
+## `patterns/body-transformation.ts`
+
+- `bodyTransformationPattern(opts)` — composes `Body` + `transformation` + `tags` + `snapshots` + `Timeline` + `observation`; gradual / staged body-change with trajectory support
+
+## `patterns/cyber-slots.ts`
+
+- `cyberSlotsPattern(opts)` — composes `Equipment` + `Body` + `transformation` + `constraints` + `tags` + `observation`; cybernetic implant / augmentation slot system
+
+## `patterns/physics.ts`
+
+- `physicsPattern(opts)` — composes `physics` + `Rng` + `observation`; spatial-hash + collision wrapper for 2D stages
+
+## `patterns/dialogue.ts`
+
+- `dialoguePattern(opts)` — composes `Fsm` with say/choices semantics; predicate-gated transitions for branching NPC dialogue trees
+
+## `patterns/score.ts`
+
+- `scorePattern(opts)` — composes `Stats` + `Timeline`; tier-based unlock conditions and score tracking
+
+## `patterns/faction.ts`
+
+- `factionPattern(opts)` — composes `Stats` (reputation = Stat with tier) + predicate content gates; no new primitive needed
+
+## `patterns/skit.ts`
+
+- `skitPattern(opts)` — PARC's Skit shape as composition: scene + observation + outcome-resolution + actor
+
+## `patterns/sandbox.ts`
+
+- `sandboxPattern(opts)` — composes `world` + `actor` + `intent` + `procgen` for free-roam Zelda/Skyrim-style stages
+
+## `patterns/world-exploration.ts` (Wave 2B)
+
+- `worldExplorationPattern(opts)` — composes `world` + `actor` + `intent` + `observation`; parser-IF movement + scope-aware observation
+
+## `patterns/bulk-tick.ts` (Wave 2C) — [BULK-TICK.md](./patterns/BULK-TICK.md)
+
+- `type TickEventProcessor<E> = (actor, now) => E[]`
+- `interface BulkTickBundleInit<E> { pool, processActor, timeline? }`
+- `interface BulkTickBundle<E> { pool, timeline, tick(now?): E[], report(events, render): string, tickAndReport(render, now?): { events, report } }`
+- `bulkTickPattern<E>(init): BulkTickBundle<E>` — forEach + collect + push + render loop; domain logic in `processActor`
+
+## `patterns/managerial.ts` (Wave 2C) — [MANAGERIAL.md](./patterns/MANAGERIAL.md)
+
+- `interface ManagerialInit<P, E> { timeline, generator, reportPrompt, applyPolicy, advance, renderEvent?, reportMaxTokens? }`
+- `interface ManagerialBundle<P, E> { applyPolicy(fields), tick(pool, now): E[], renderReport(events, now): Promise<string>, lastTickEvents, timeline }`
+- `managerialPattern<P, E>(init): ManagerialBundle<P, E>` — policy-issue + bulk-tick + LLM report-render loop
+
+## `patterns/form.ts` (Wave 2D) — [FORM.md](./patterns/FORM.md)
+
+- `interface FormAesthetics { displayName, description?, colorPrimary?, colorSecondary?, iconTag? }`
+- `interface FormLore { origin?, faction?, archetype?, proseRegister? }`
+- `interface FormInit { id, body, stats, abilities, aesthetics, lore? }`
+- `interface Form { id, actor: Actor, abilities: Registry<ActionDef>, aesthetics, lore }`
+- `formPattern(init): Form` — assembles Body + Stats + ActionDef set + aesthetics into a pilotable Form
+
+## `patterns/form-collection.ts` (Wave 2D) — [FORM-COLLECTION.md](./patterns/FORM-COLLECTION.md)
+
+- `formCollectionPattern(opts)` — `PlaceholderRegistry<Form>` wrapper; collection grows via gameplay; `unlock(id, form)` resolves placeholders
+
+## `patterns/grafting.ts` (Wave 2D) — [GRAFTING.md](./patterns/GRAFTING.md)
+
+- `interface GraftingOptions { forms, learnedLibrary, subsumableCost?, consumeOnSubsume?, helminthVersion?, abilityScaling?, slot4Lock?, invigorations?, provenanceTracking?, maxConfigSlots? }`
+- `interface GraftingBundle { hooks: { subsume(formId, abilityId): InjectionRecord, inject(req): FormConfig, replace(req): FormConfig, listLearned(): AbilityDef[], listInjected(formId): FormConfig[] } }`
+- `graftingPattern(opts): GraftingBundle` — Helminth-style ability transfer with provenance, slot-4 lock, and helminthVersion transform
+
+## `patterns/puppet.ts` (Wave 2D) — [PUPPET.md](./patterns/PUPPET.md)
+
+- `puppetPattern(opts)` — actor-piloting-actor; player's true-self pilots a form Actor; identity/memory on pilot, body/abilities on form
+
+## `patterns/lineage.ts` — [LINEAGE.md](./patterns/LINEAGE.md)
+
+- `lineagePattern(opts)` — procgen.buildGraph (tree) + Actor affinity-with-parent; `listDescendants`, `findAncestor`, `computeInbreedingCoefficient`
+
+## `patterns/daily-vignette.ts` — [DAILY-VIGNETTE.md](./patterns/DAILY-VIGNETTE.md)
+
+- `dailyVignettePattern(opts)` — `generate` + `observation` + `Timeline` + scheduler; one well-grounded vignette per game-day tick with continuity from past events
+
+## `patterns/slot-assignment.ts` — [SLOT-ASSIGNMENT.md](./patterns/SLOT-ASSIGNMENT.md)
+
+- `slotAssignmentPattern(opts)` — ActorPool + slot constraint predicates + ConditionalTrigger; "worker X assigned to room slot Y" relation
+
+## `patterns/spatial-propagation.ts` — [SPATIAL-PROPAGATION.md](./patterns/SPATIAL-PROPAGATION.md)
+
+- `spatialPropagationPattern(opts)` — World graph + ConditionalTrigger + Scheduler; room-to-room event spread (fire, infection, gossip, faction territory)
+
+## `patterns/subject-sandbox.ts` — [SUBJECT-SANDBOX.md](./patterns/SUBJECT-SANDBOX.md)
+
+- `subjectSandboxPattern(opts)` — world + actor + scheduler + scene + predicate-triggers + dailyVignettePattern + Timeline; first-person life-sim where player IS the subject
 
 ## `ui/voronoi-influence-map.tsx` (Wave 2E)
 

@@ -335,41 +335,41 @@ Each `src/lib/patterns/<name>.ts` is 90% wiring + 10% defaults. No private state
 
 ### Existing-primitive composers (Wave 0 / Wave 1 deps only)
 
-- 💭 `inventory.ts` — composes `Inventory` + `observation` + `chub-adapters` + `prose-register` snippet library
-- 💭 `effects.ts` — composes `EffectStore` + `Stats` + `Scheduler` + `Timeline`
-- 💭 `turn-combat.ts` — composes `Action` + `combat-turn` + `EffectStore` + `Stats` + `Rng` + `Timeline`
-- 💭 `realtime-combat.ts` — composes `RealtimeWorld` + `physics` + `Scheduler` + `Rng` + `Timeline`
-- 💭 `body-transformation.ts` — composes `Body` + `transformation` + `tags` + `snapshots` + `Timeline` + `observation`
-- 💭 `cyber-slots.ts` — composes `Equipment` + `Body` + `transformation` + `constraints` + `tags` + `observation`
-- 💭 `physics.ts` — composes `physics` + `Rng` + `observation`
-- 💭 `dialogue.ts` — composes `Fsm` with say/choices semantics; predicate-gated transitions
-- 💭 `score.ts` — composes `Stats` + `Timeline`; tier-based unlock conditions
-- 💭 `faction.ts` — composes `Stats` (reputation = Stat with tier) + content-gate predicate. No primitive needed; reduces.
-- 💭 `skit.ts` — PARC's Skit shape as composition: scene + observation + outcome-resolution + actor. The "monolith feel" at the import statement; pure composition underneath.
-- 💭 `sandbox.ts` — composes `world` + `actor` + `intent` + `procgen` for free-roam stages
+- ✅ `inventory.ts` — composes `Inventory` + `observation` + `chub-adapters` + `prose-register` snippet library
+- ✅ `effects.ts` — composes `EffectStore` + `Stats` + `Scheduler` + `Timeline`
+- ✅ `turn-combat.ts` — composes `Action` + `combat-turn` + `EffectStore` + `Stats` + `Rng` + `Timeline`
+- ✅ `realtime-combat.ts` — composes `RealtimeWorld` + `physics` + `Scheduler` + `Rng` + `Timeline`
+- ✅ `body-transformation.ts` — composes `Body` + `transformation` + `tags` + `snapshots` + `Timeline` + `observation`
+- ✅ `cyber-slots.ts` — composes `Equipment` + `Body` + `transformation` + `constraints` + `tags` + `observation`
+- ✅ `physics.ts` — composes `physics` + `Rng` + `observation`
+- ✅ `dialogue.ts` — composes `Fsm` with say/choices semantics; predicate-gated transitions
+- ✅ `score.ts` — composes `Stats` + `Timeline`; tier-based unlock conditions
+- ✅ `faction.ts` — composes `Stats` (reputation = Stat with tier) + content-gate predicate. No primitive needed; reduces.
+- ✅ `skit.ts` — PARC's Skit shape as composition: scene + observation + outcome-resolution + actor. The "monolith feel" at the import statement; pure composition underneath.
+- ✅ `sandbox.ts` — composes `world` + `actor` + `intent` + `procgen` for free-roam stages
 
 ### Wave-2-dependent composers
 
 - ✅ `scene.ts` (Wave 2A) — composes the `scene` primitive + `body` + `actor` + `tag-parser`; the erotic-RPG scene resolver
-- 💭 `world-exploration.ts` (Wave 2B) — composes `world` + `actor` + `intent` + `observation`
-- 💭 `bulk-tick.ts` (Wave 2C) — composes `ActorPool` + `Scheduler` + `Timeline`; weekly-tick pattern
-- 💭 `managerial.ts` (Wave 2C) — composes form-input + `bulk-tick` + `Timeline.summarize`; player-as-ruler
+- ✅ `world-exploration.ts` (Wave 2B) — composes `world` + `actor` + `intent` + `observation`
+- ✅ `bulk-tick.ts` (Wave 2C) — composes `ActorPool` + `Scheduler` + `Timeline`; weekly-tick pattern
+- ✅ `managerial.ts` (Wave 2C) — composes form-input + `bulk-tick` + `Timeline.summarize`; player-as-ruler
 
 ### Warframe-shape composers (Wave 2D)
 
-- 💭 `form.ts` — Form-as-character bundle
-- 💭 `form-collection.ts` — `PlaceholderRegistry<Form>` with unlock progression
-- 💭 `grafting.ts` — Helminth-style ability transfer
-- 💭 `puppet.ts` — actor-piloting-actor
+- ✅ `form.ts` — Form-as-character bundle
+- ✅ `form-collection.ts` — `PlaceholderRegistry<Form>` with unlock progression
+- ✅ `grafting.ts` — Helminth-style ability transfer
+- ✅ `puppet.ts` — actor-piloting-actor
 
 ### Wave 1.5-dependent composers
 
-- 💭 `subjectSandboxPattern` — first-person life-sim sandbox where player IS the subject in a world of NPC relationships. Composes world + actor + scheduler + scene + predicate-triggers + `dailyVignettePattern` + Timeline. Distinct from `sandboxPattern` (free-roam exploration framing — Zelda/Skyrim-style); subject-sandbox is about *life and relationships*, not exploration and combat. Used by Subject-life-sim-shape (#19), Pregnancy-sim-shape (#17), Dating-sim, future life-sim shapes.
-- 💭 `dailyVignettePattern` — wraps `generate` + `observation` + `Timeline` + `scheduler` to produce one well-grounded vignette per game-day tick, with continuity from past vignettes. Slice-of-life equivalent of `bulkTickPattern`: bulkTick advances many actors in parallel; daily-vignette advances ONE subject deeply through time. Used across the slice-of-life-texture meta-category.
-- 💭 `slotAssignmentPattern` — "worker X is assigned to room slot Y" relation. Composes ActorPool + Room's assigned-workers list + per-slot constraint predicates + `ConditionalTrigger` for slot-validity. Used by Facility-management-shape (#20), FC-shape (#8) slave job assignments, Warframe-shape (#9) loadout slots, any "assign actor to slot" mechanic.
-- 💭 `spatialPropagationPattern` — events propagate room-to-room through the world graph: fire spreads to adjacencies, raiders move next-turn, infections jump on contact, panic radiates from incident sites. Composes World graph + ConditionalTrigger + Scheduler tick. Hugely reusable: plague spread (FS-shape), gossip propagation (LT-shape), faction territory shift (LT-shape), contamination (Lobotomy variant of #20), wildfire (any wilderness sandbox).
+- ✅ `subject-sandbox.ts` (`subjectSandboxPattern`) — first-person life-sim sandbox where player IS the subject in a world of NPC relationships. Composes world + actor + scheduler + scene + predicate-triggers + `dailyVignettePattern` + Timeline. Distinct from `sandboxPattern` (free-roam exploration framing — Zelda/Skyrim-style); subject-sandbox is about *life and relationships*, not exploration and combat. Used by Subject-life-sim-shape (#19), Pregnancy-sim-shape (#17), Dating-sim, future life-sim shapes.
+- ✅ `daily-vignette.ts` (`dailyVignettePattern`) — wraps `generate` + `observation` + `Timeline` + `scheduler` to produce one well-grounded vignette per game-day tick, with continuity from past vignettes. Slice-of-life equivalent of `bulkTickPattern`: bulkTick advances many actors in parallel; daily-vignette advances ONE subject deeply through time. Used across the slice-of-life-texture meta-category.
+- ✅ `slot-assignment.ts` (`slotAssignmentPattern`) — "worker X is assigned to room slot Y" relation. Composes ActorPool + Room's assigned-workers list + per-slot constraint predicates + `ConditionalTrigger` for slot-validity. Used by Facility-management-shape (#20), FC-shape (#8) slave job assignments, Warframe-shape (#9) loadout slots, any "assign actor to slot" mechanic.
+- ✅ `spatial-propagation.ts` (`spatialPropagationPattern`) — events propagate room-to-room through the world graph: fire spreads to adjacencies, raiders move next-turn, infections jump on contact, panic radiates from incident sites. Composes World graph + ConditionalTrigger + Scheduler tick. Hugely reusable: plague spread (FS-shape), gossip propagation (LT-shape), faction territory shift (LT-shape), contamination (Lobotomy variant of #20), wildfire (any wilderness sandbox).
 - 💭 `focusPattern` — directs player attention to whatever's currently interesting (a fire, a low-energy worker, an incoming raid, a containment breach). Composes Observation salience + Timeline urgency + UI panels. The "what should the player look at now" mechanic. Used by Facility-management-shape (#20), RTS-shape (#15), FC-shape (#8), any high-action-density managerial stage.
-- 💭 `lineagePattern` — composer over `procgen.buildGraph` (tree connectivity) + Actor.affinity-with-"parent"-tag for parent-child relationships. Operations like "list descendants," "find common ancestor," "compute inbreeding coefficient" fall out as graph queries. Pattern, not primitive — reduces to Actor + procgen + Graph queries. Used by Breeding-sim-shape (#18), FC-shape (#8), LT-shape (#6, dynasty tracking).
+- ✅ `lineage.ts` (`lineagePattern`) — composer over `procgen.buildGraph` (tree connectivity) + Actor.affinity-with-"parent"-tag for parent-child relationships. Operations like "list descendants," "find common ancestor," "compute inbreeding coefficient" fall out as graph queries. Pattern, not primitive — reduces to Actor + procgen + Graph queries. Used by Breeding-sim-shape (#18), FC-shape (#8), LT-shape (#6, dynasty tracking).
 
 ### Wave 2I composers
 
@@ -380,14 +380,14 @@ Each `src/lib/patterns/<name>.ts` is 90% wiring + 10% defaults. No private state
 
 These are the genuinely novel content. Each is a small composer (~30 LOC) plus a paragraph of when-to-use. The library does not prescribe a hybrid framework; the patterns catalog the synergy moves themselves so authors compose them as needed.
 
-- 💭 `synergy/llm-narrates-programmatic-tracks.ts` — procgen produces "the combat-outcome roll says you hit for 7"; LLM narrates the hit. `tag-parser` captures any mechanical effects the LLM mentions; reducers apply them.
-- 💭 `synergy/programmatic-narrates-llm-decides.ts` — LLM picks an action from a constrained menu; procgen renders the deterministic narration. Used for NPC AI where you want LLM personality with deterministic mechanical fidelity.
-- 💭 `synergy/llm-constrained-by-procgen.ts` — procgen lays the skeleton (room topology, item placement); LLM fills detail within explicit constraints. Used for world generation with mechanical-validity guarantees.
-- 💭 `synergy/procgen-validates-llm.ts` — LLM proposes content; programmatic invariants check it (loot respects power curve, encounter respects difficulty band). Reject + re-prompt loop. Used for safety-critical generated content.
-- 💭 `synergy/cache-by-key.ts` — LLM output cached keyed by any structural id. Composes with `PlaceholderRegistry`. Used everywhere a generated thing must be consistent on revisit.
-- 💭 `synergy/fallback-chain.ts` — deterministic grammar tries first; LLM fallback on parse miss; LLM-with-broader-context on second miss. Used for intent parsing where determinism is preferred but graceful degradation is needed.
-- 💭 `synergy/seed-from-player.ts` — LLM extracts a seed/spec from the player's free-form input; procgen elaborates from the seed. Used for player-as-author flows.
-- 💭 `synergy/hierarchical-summarization.ts` — for FC-scale stages: per-actor mini-reports first, then aggregate. Avoids 50k-token prompts. Composes with `Timeline.summarize`.
+- ✅ `synergy/llm-narrates-programmatic-tracks.ts` — procgen produces "the combat-outcome roll says you hit for 7"; LLM narrates the hit. `tag-parser` captures any mechanical effects the LLM mentions; reducers apply them.
+- ✅ `synergy/programmatic-narrates-llm-decides.ts` — LLM picks an action from a constrained menu; procgen renders the deterministic narration. Used for NPC AI where you want LLM personality with deterministic mechanical fidelity.
+- ✅ `synergy/llm-constrained-by-procgen.ts` — procgen lays the skeleton (room topology, item placement); LLM fills detail within explicit constraints. Used for world generation with mechanical-validity guarantees.
+- ✅ `synergy/procgen-validates-llm.ts` — LLM proposes content; programmatic invariants check it (loot respects power curve, encounter respects difficulty band). Reject + re-prompt loop. Used for safety-critical generated content.
+- ✅ `synergy/cache-by-key.ts` — LLM output cached keyed by any structural id. Composes with `PlaceholderRegistry`. Used everywhere a generated thing must be consistent on revisit.
+- ✅ `synergy/fallback-chain.ts` — deterministic grammar tries first; LLM fallback on parse miss; LLM-with-broader-context on second miss. Used for intent parsing where determinism is preferred but graceful degradation is needed.
+- ✅ `synergy/seed-from-player.ts` — LLM extracts a seed/spec from the player's free-form input; procgen elaborates from the seed. Used for player-as-author flows.
+- ✅ `synergy/hierarchical-summarization.ts` — for FC-scale stages: per-actor mini-reports first, then aggregate. Avoids 50k-token prompts. Composes with `Timeline.summarize`.
 - 💭 `synergy/sliding-window-chat.ts` — pairs the chatWindow primitive (when shipped) with Timeline so that as turns age out of the bounded verbatim window, their relevant content is captured as Timeline events (via tag-parser extraction or LLM summarization). Information persists; verbatim text doesn't. Defaults to a 5–10 turn window; crossing the window forces summarization. The "I want a 200-turn raw history" path requires explicit author opt-in plus a warning in the pattern doc about what it costs.
 
 14 additional synergy pattern candidates mined from SillyTavern / NovelAI / AI Dungeon — see `src/lib/mining/SYNERGY.md`.
@@ -523,3 +523,11 @@ Read-only investigation tasks that should precede their dependent design work.
   - `src/lib/patterns/freeform-pipeline.ts` — Wave 2I pattern. Full escape-hatch loop: freeform text → intent parse → oracle delta → policy (`strict`/`coerce`; `extend` is TODO) → apply → render. **Status: SHIPPED** (`extend` policy is not implemented; throws with TODO).
   - `src/lib/ui/` shell components — Wave 2E **shell layer** (distinct from game UI components like TileGrid/HexGrid/ActorPanel which remain pending): `WorldStatePanel`, `ActionSurface`, `ScenePane`, `ChatLogSidebar`, `FreeformInput`. **Status: PARTIALLY LANDED** (game UI primitives TileGrid, HexGrid, GraphView, ActorPanel, StatBar, ScoreBoard, ChoiceList, FormBuilder, SlotPicker, ModalPicker, TimelinePanel, RegistryGallery still pending).
   - `examples/world-primary/` — Wave 3 partial. Demonstrates the FRONTEND-SHAPE.md design end-to-end: state machine + ConditionalTrigger + renderTrigger + freeformPipeline + full UI shell. **Status: SHIPPED**.
+- **Composer build pass 2026-05-27** — 33 composers + `world.ts` primitive shipped across 6 parallel agent batches. See DECISIONS.md §13 for LOC totals and reconciliation notes.
+  - `src/lib/world.ts` — Wave 2B world graph primitive (rooms, exits, scope). **Status: SHIPPED**.
+  - `src/lib/patterns/{inventory,effects,turn-combat,realtime-combat,body-transformation}.ts` — extracted from existing examples. **Status: SHIPPED**.
+  - `src/lib/patterns/{cyber-slots,physics,dialogue,score,faction,skit,lineage,bulk-tick}.ts` — new composers, batch 1. **Status: SHIPPED**.
+  - `src/lib/patterns/{managerial,form,form-collection,grafting,puppet,daily-vignette}.ts` — new composers, batch 2. **Status: SHIPPED**.
+  - `src/lib/patterns/{sandbox,world-exploration,subject-sandbox,slot-assignment,spatial-propagation}.ts` — world-dependent composers. **Status: SHIPPED**.
+  - 8 synergy patterns (`llm-narrates-programmatic-tracks`, `programmatic-narrates-llm-decides`, `llm-constrained-by-procgen`, `procgen-validates-llm`, `cache-by-key`, `fallback-chain`, `seed-from-player`, `hierarchical-summarization`). **Status: SHIPPED**. (`sliding-window-chat` deferred; depends on `chat-window.ts` callers.)
+  - `focusPattern` — **NOT YET SHIPPED**. Still 💭; no `src/lib/patterns/focus.ts` exists.
