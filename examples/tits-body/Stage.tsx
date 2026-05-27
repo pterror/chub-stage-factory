@@ -6,7 +6,7 @@
  * snapshots let the player undo to a prior body-state. Surfaces the full
  * effective tag map to the LLM as an observation.
  *
- * Primitives: body, transformation, snapshots, persistence.
+ * Primitives: bodyTransformationPattern (composer).
  * Philosophy: rule #4 (effective tags recomputed each read), rule #6
  * (trajectories are functions of elapsed, not counters).
  *
@@ -18,18 +18,10 @@
 
 import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { Body } from "../../src/lib/body";
 import { Registry } from "../../src/lib/registry";
-import { Timeline } from "../../src/lib/timeline";
-import { TransformationDef, apply, applyTrajectories, getConflicts } from "../../src/lib/transformation";
-import { Snapshots } from "../../src/lib/snapshots";
-import { parseTags } from "../../src/lib/tag-parser";
-import { emitStageDirections } from "../../src/lib/chub-adapters";
-import { assembleObservations, ObservationSource } from "../../src/lib/observation";
-import {
-  PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
-  mergeResponses, shard, shardOf, withPersistence,
-} from "../../src/lib/persistence";
+import { TransformationDef } from "../../src/lib/transformation";
+import { withPersistence } from "../../src/lib/persistence";
+import { bodyTransformationPattern, type BodyTransformationBundle } from "../../src/lib/patterns/body-transformation";
 
 interface MessageStateType { ticks: number; lastApplied?: string; [k: string]: unknown }
 interface ChatStateType { [k: string]: unknown }
@@ -65,133 +57,68 @@ const TFS = new Registry<TransformationDef>({
 });
 
 export class TitsBodyStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
-  body: Body;
-  snaps: Snapshots;
-  tick = { n: 0, lastApplied: undefined as string | undefined };
-  applied = new Timeline<string>({ id: "tinctures-applied", channels: ["interoceptive"], key: "applied", windowSize: 8, habituationTau: 6 });
-  layers = createChubLayers();
+  p!: BodyTransformationBundle;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    this.body = new Body({
-      head: ["human", "horned!none", "hair-long"],
-      torso: ["human", "skin-soft"],
-      arms: ["human", "hands", "skin-soft"],
-      legs: ["human", "feet", "skin-soft"],
-      tail: [],
-    });
-    this.snaps = new Snapshots(this.body);
-    this.snaps.save("baseline");
+    const ms = (data.messageState as Record<string, string | undefined> | null) ?? null;
+    const cs = (data.chatState as Record<string, string | undefined> | null) ?? null;
 
-    this.layers = createChubLayers({
-      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
-      chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
-    });
-    this.initStore(() => new PersistenceStore({
-      tick: shard("tick", this.tick,
-        (i) => ({ n: i.n, lastApplied: i.lastApplied }),
-        (d: { n: number; lastApplied?: string }) => ({ n: d.n, lastApplied: d.lastApplied }),
-        this.layers.messageStateBackend, chubTreeHistory()),
-      body: shardOf("body", this.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-      snaps: shard("snaps", this.snaps,
-        (i) => i.toJSON(),
-        (d: ReturnType<Snapshots["toJSON"]>) => Snapshots.fromJSON(d, this.body),
-        this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-    }));
-  }
-
-  private tryApply(id: string, now: number): { ok: boolean; reason?: string } {
-    const def = TFS.get(id); if (!def) return { ok: false, reason: "no-such-tf" };
-    const confs = getConflicts(def, this.body);
-    for (const c of confs) {
-      if (c.incomingSays === "block" || c.existingSays === "block") return { ok: false, reason: `block:${c.existingId}` };
-      if (c.incomingSays === "replace") this.body.removeTransformation(c.existingId);
-    }
-    const inst = apply(def, this.body, now);
-    if (!inst) return { ok: false, reason: "canApply-failed" };
-    this.applied.push(id, now);
-    return { ok: true };
-  }
-
-  private observationSources(now: number): ObservationSource<{ now: number }>[] {
-    return [
-      {
-        id: "body-state", channels: ["interoceptive"],
-        salience: () => Math.min(1, this.body.getTransformations().length / 3 + 0.3),
-        habituationTau: 4,
-        properties: { interoceptive: {
-          slots: () => {
-            const out: Record<string, string[]> = {};
-            for (const [slot, tags] of this.body.getAllEffectiveTags()) out[slot] = tags.toArray();
-            return out;
-          },
-          in_progress: () => this.body.getTransformations().map((tf) => ({
-            id: tf.id, slot: tf.slot, elapsed: now - tf.startTime, duration: tf.duration, current_tags: tf.addTags,
-          })),
-        } },
+    this.p = bodyTransformationPattern({
+      messageState: ms,
+      chatState: cs,
+      initialSlots: {
+        head: ["human", "horned!none", "hair-long"],
+        torso: ["human", "skin-soft"],
+        arms: ["human", "hands", "skin-soft"],
+        legs: ["human", "feet", "skin-soft"],
+        tail: [],
       },
-    ];
+      baselineSnapshot: "baseline",
+      tfs: TFS,
+      stageDirections: {
+        architectures: ["body_then_world", "accumulation"],
+        register: { pov: "close-second", tense: "present", distance: "close" },
+        prefix:
+          "Vey is the alchemist; the player is the subject of the tincture. To apply a tincture, " +
+          "emit `<drink>cat_tail|dragon_horns|fur_torso</drink>`. To restore a baseline body, " +
+          "emit `<restore>baseline</restore>`. The in_progress array shows partially-developed " +
+          "TFs — render them as the gradual change they are.",
+      },
+    });
+    this.initStore(() => this.p.store);
   }
 
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    this.tick.n += 1;
-    const now = this.tick.n;
-    applyTrajectories(this.body, now);
-    this.body.tick(now);
-    const observed = assembleObservations(
-      [...this.observationSources(now), this.applied],
-      { now }, { now, maxCount: 3 },
-    );
-    const stageDirections = emitStageDirections({
-      observations: observed,
-      architectures: ["body_then_world", "accumulation"],
-      register: { pov: "close-second", tense: "present", distance: "close" },
-      prefix:
-        "Vey is the alchemist; the player is the subject of the tincture. To apply a tincture, " +
-        "emit `<drink>cat_tail|dragon_horns|fur_torso</drink>`. To restore a baseline body, " +
-        "emit `<restore>baseline</restore>`. The in_progress array shows partially-developed " +
-        "TFs — render them as the gradual change they are.",
-    });
-    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
+    return this.p.buildBeforePrompt(msg, this.bound) as Promise<Partial<StageResponse<ChatStateType, MessageStateType>>>;
   }
 
-  async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = this.tick.n;
-    const r1 = parseTags<Record<string, unknown>>(botMessage.content, { drink: { kind: "string", enum: TFS.keys() } });
-    const r2 = parseTags<Record<string, unknown>>(r1.stripped, { restore: { kind: "string" } });
-    if (typeof r1.parsed.drink === "string" && r1.parsed.drink) {
-      const res = this.tryApply(r1.parsed.drink as string, now);
-      if (res.ok) this.tick.lastApplied = r1.parsed.drink as string;
-    }
-    if (typeof r2.parsed.restore === "string" && r2.parsed.restore) {
-      this.snaps.restore(r2.parsed.restore as string);
-      this.applied.clear();
-    }
-    const stripped = r2.stripped !== botMessage.content ? r2.stripped : null;
-    return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
+  async afterResponse(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    return this.p.buildAfterResponse(msg, this.bound) as Promise<Partial<StageResponse<ChatStateType, MessageStateType>>>;
   }
 
   render(): ReactElement {
-    const now = this.tick.n;
+    const { body, tick, snaps } = this.p;
+    const now = tick.n;
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
         <h3 style={{ marginTop: 0 }}>Body — tick {now}</h3>
         <table style={{ borderCollapse: "collapse" }}>
           <tbody>
-            {this.body.getSlots().map((s) => (
+            {body.getSlots().map((s) => (
               <tr key={s}><td style={{ padding: "2px 8px", color: "#9ad" }}>{s}</td>
-                <td style={{ padding: "2px 8px" }}>{this.body.getEffectiveTags(s).toArray().join(", ") || "—"}</td></tr>
+                <td style={{ padding: "2px 8px" }}>{body.getEffectiveTags(s).toArray().join(", ") || "—"}</td></tr>
             ))}
           </tbody>
         </table>
         <h4>Active transformations</h4>
-        {this.body.getTransformations().length === 0 ? <em style={{ opacity: 0.5 }}>none</em> : (
-          <ul>{this.body.getTransformations().map((tf) => (
+        {body.getTransformations().length === 0 ? <em style={{ opacity: 0.5 }}>none</em> : (
+          <ul>{body.getTransformations().map((tf) => (
             <li key={tf.id}><b>{tf.id}</b> on {tf.slot} — elapsed {now - tf.startTime}/{tf.duration ?? "∞"} — adding [{tf.addTags.join(", ")}]</li>
           ))}</ul>
         )}
         <div style={{ opacity: 0.7, fontSize: "0.85rem", marginTop: 8 }}>
-          last applied: {this.tick.lastApplied ?? "—"} · snapshots: {this.snaps.list().join(", ") || "—"}
+          last applied: {tick.lastApplied ?? "—"} · snapshots: {snaps.list().join(", ") || "—"}
         </div>
       </div>
     );

@@ -6,7 +6,7 @@
  * with the right stacking policy and trajectory. `tick` per turn drains
  * expired effects.
  *
- * Primitives: effects, tag-parser, chub-adapters, persistence.
+ * Primitives: effectsPattern (composer).
  * Philosophy: rule #3 (effects.tick returns the expired set; the stage
  * decides what to do with it), rule #6 (elapsed = now - startTime).
  *
@@ -16,16 +16,11 @@
 
 import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { EffectDef, EffectStore, EffectMagnitudes } from "../../src/lib/effects";
+import { EffectDef } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
-import { Timeline, summarize } from "../../src/lib/timeline";
-import { parseTags } from "../../src/lib/tag-parser";
-import { emitStageDirections } from "../../src/lib/chub-adapters";
-import { assembleObservations, ObservationSource } from "../../src/lib/observation";
-import {
-  PersistenceStore, createChubLayers, chubTreeHistory, mergeResponses, counterShard, shardOf,
-  withPersistence,
-} from "../../src/lib/persistence";
+import { summarize } from "../../src/lib/timeline";
+import { withPersistence } from "../../src/lib/persistence";
+import { effectsPattern, type EffectsBundle } from "../../src/lib/patterns/effects";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }
 type ChatStateType = null;
@@ -59,92 +54,39 @@ const TINCTURES = new Registry<EffectDef>({
 });
 
 export class EffectsStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
-  effectStore = new EffectStore();
-  tick = { n: 0 };
-  events = new Timeline<string>({ id: "tincture-events", channels: ["interoceptive"], windowSize: 20, habituationTau: 2 });
-  layers = createChubLayers();
+  p!: EffectsBundle;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    this.layers = createChubLayers({
-      messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
+    const ms = (data.messageState as Record<string, string | undefined> | null) ?? null;
+    this.p = effectsPattern({
+      messageState: ms,
+      tinctures: TINCTURES,
+      stageDirections: {
+        architectures: ["focus_hold", "body_then_world"],
+        register: { pov: "close-second", tense: "present", distance: "close" },
+        prefix:
+          "Klio is the apothecary. To apply a tincture to the player, emit a tag like " +
+          "`<apply>adrenaline</apply>` or `<dispel>calm</dispel>` (the tag bodies are stripped " +
+          "from what the user sees). Available tincture ids and their stacking are in the " +
+          "visual observation.",
+      },
     });
-    this.initStore(() => new PersistenceStore({
-      tick: counterShard("tick", this.tick, this.layers.messageStateBackend, chubTreeHistory()),
-      effects: shardOf("effects", this.effectStore, (d) => EffectStore.fromJSON(d, TINCTURES.toJSON()), this.layers.messageStateBackend, chubTreeHistory()),
-    }));
-  }
-
-  private observationSources(now: number): ObservationSource<{ now: number }>[] {
-    return [
-      {
-        id: "active-effects", channels: ["interoceptive"],
-        salience: () => Math.min(1, this.effectStore.active().length / 3), habituationTau: 3,
-        properties: { interoceptive: {
-          active: () => this.effectStore.active().map((i) => {
-            const m: EffectMagnitudes = this.effectStore.magnitudesFor(i.id, now) ?? {};
-            return {
-              id: i.id,
-              remaining: i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : null,
-              stacks: i.count, stats: m.stats ?? {}, tags: m.tagsAdd ?? [],
-            };
-          }),
-        } },
-      },
-      {
-        id: "tincture-menu", channels: ["visual"], salience: () => 0.3, habituationTau: 20,
-        properties: { visual: {
-          available: () => TINCTURES.entries().map(([id, def]) => ({ id, stacking: def.stacking, duration: def.duration })),
-        } },
-      },
-    ];
+    this.initStore(() => this.p.store);
   }
 
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    this.tick.n += 1;
-    const now = this.tick.n;
-    const expired = this.effectStore.tick(now);
-    for (const e of expired) this.events.push(`expired:${e.id}`, now);
-
-    const observed = assembleObservations(
-      [...this.observationSources(now), this.events],
-      { now }, { now, maxCount: 3 },
-    );
-    const stageDirections = emitStageDirections({
-      observations: observed,
-      architectures: ["focus_hold", "body_then_world"],
-      register: { pov: "close-second", tense: "present", distance: "close" },
-      prefix:
-        "Klio is the apothecary. To apply a tincture to the player, emit a tag like " +
-        "`<apply>adrenaline</apply>` or `<dispel>calm</dispel>` (the tag bodies are stripped " +
-        "from what the user sees). Available tincture ids and their stacking are in the " +
-        "visual observation.",
-    });
-    return mergeResponses({ stageDirections }, await this.bound.beforePrompt(msg));
+    return this.p.buildBeforePrompt(msg, this.bound) as Promise<Partial<StageResponse<ChatStateType, MessageStateType>>>;
   }
 
-  async afterResponse(botMessage: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
-    const now = this.tick.n;
-    const r1 = parseTags<Record<string, unknown>>(botMessage.content, { apply: { kind: "string" } });
-    const r2 = parseTags<Record<string, unknown>>(r1.stripped, { dispel: { kind: "string" } });
-    const applyId = typeof r1.parsed.apply === "string" ? (r1.parsed.apply as string).trim() : "";
-    const tincture = applyId ? TINCTURES.get(applyId) : undefined;
-    if (tincture) {
-      this.effectStore.apply(tincture, now);
-      this.events.push(`applied:${applyId}`, now);
-    }
-    const dispelTag = typeof r2.parsed.dispel === "string" ? (r2.parsed.dispel as string).trim() : "";
-    if (dispelTag) {
-      const dispelled = this.effectStore.dispelByTag(dispelTag);
-      for (const d of dispelled) this.events.push(`dispelled:${d.id}`, now);
-    }
-    const stripped = r2.stripped !== botMessage.content ? r2.stripped : null;
-    return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
+  async afterResponse(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
+    return this.p.buildAfterResponse(msg, this.bound) as Promise<Partial<StageResponse<ChatStateType, MessageStateType>>>;
   }
 
   render(): ReactElement {
-    const now = this.tick.n;
-    const active = this.effectStore.active();
+    const { effectStore, tick, events } = this.p;
+    const now = tick.n;
+    const active = effectStore.active();
     return (
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
         <h3 style={{ marginTop: 0 }}>Klio&apos;s bench — tick {now}</h3>
@@ -153,7 +95,7 @@ export class EffectsStage extends withPersistence<ChatStateType, InitStateType, 
           <ul>
             {active.map((i) => {
               const remaining = i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : "∞";
-              const mag = this.effectStore.magnitudesFor(i.id, now);
+              const mag = effectStore.magnitudesFor(i.id, now);
               return (
                 <li key={i.id}>
                   <b>{i.id}</b> ×{i.count} — remaining {String(remaining)} — {JSON.stringify(mag?.stats ?? {})} {mag?.tagsAdd?.join(",")}
@@ -164,7 +106,7 @@ export class EffectsStage extends withPersistence<ChatStateType, InitStateType, 
         )}
         <h4>Recent events</h4>
         <pre style={{ background: "#000", padding: 8, maxHeight: 200, overflow: "auto" }}>
-{summarize(this.events.window(20), (e, at) => `${e}@${at}`) || "—"}
+{summarize(events.window(20), (e, at) => `${e}@${at}`) || "—"}
         </pre>
       </div>
     );
