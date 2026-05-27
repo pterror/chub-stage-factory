@@ -1,0 +1,32 @@
+{
+  "environment": "development",
+  "users": {
+    "0": {
+      "anonymizedId": "0",
+      "name": "Tester",
+      "isRemoved": false,
+      "chatProfile": ""
+    }
+  },
+  "characters": {
+    "1": {
+      "anonymizedId": "1",
+      "name": "Bot",
+      "isRemoved": false,
+      "description": "Wave 2F substrate demo bot.",
+      "personality": "",
+      "first_message": "Click a tile to teleport the sphere. Drag to orbit.",
+      "scenario": "",
+      "example_dialogs": "",
+      "tavern_personality": "",
+      "system_prompt": "",
+      "post_history_instructions": "",
+      "alternate_greetings": [],
+      "partial_extensions": {}
+    }
+  },
+  "config": null,
+  "messageState": null,
+  "chatState": null,
+  "initState": null
+}

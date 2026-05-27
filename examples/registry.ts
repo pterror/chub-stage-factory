@@ -31,6 +31,8 @@ import { WorldPrimaryStage } from "./world-primary/Stage";
 import worldPrimaryInit from "./world-primary/test-init.json";
 import { TestCounterStage } from "./_test-counter/Stage";
 import testCounterInit from "./_test-counter/test-init.json";
+import { ThreeDDemoStage } from "./_3d-demo/Stage";
+import threeDDemoInit from "./_3d-demo/test-init.json";
 
 export interface ExampleEntry {
   name: string;
@@ -132,6 +134,17 @@ export const EXAMPLES: ExampleEntry[] = [
     primitives: [],
     factory: (d) => new TestCounterStage(d),
     testInit: testCounterInit,
+  },
+  {
+    name: "_3d-demo",
+    label: "_3d-demo — Wave 2F substrate demo (internal)",
+    description: "Physics3DWorld + TileGrid3D + ThirdPersonRig + AssetCache; click-to-teleport sphere demo. Browser-only.",
+    primitives: [
+      "3d/scene", "3d/physics", "3d/assets",
+      "3d/camera-rigs/third-person", "3d/ui/TileGrid3D",
+    ],
+    factory: (d) => new ThreeDDemoStage(d),
+    testInit: threeDDemoInit,
   },
 ];
 

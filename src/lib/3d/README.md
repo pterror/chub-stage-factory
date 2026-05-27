@@ -9,6 +9,25 @@ The R3F scene wrapper provides an embedded R3F canvas safe for Chub-iframe use. 
 context loss, pointer events), see `src/lib/3D-SCENE.md`. For design
 rationale, see `src/lib/design/R3F-SCENE.md`.
 
+## Module index
+
+| Path                          | Doc                                       | Purpose                            |
+|-------------------------------|-------------------------------------------|------------------------------------|
+| `scene.tsx`                   | `../3D-SCENE.md`                          | R3F `<Canvas>` wrapper             |
+| `loader.tsx`                  | (in 3D-SCENE.md)                          | DOM-spinner fallback               |
+| `use-three-handle.ts`         | (in 3D-SCENE.md)                          | Imperative handle inside Canvas    |
+| `physics.ts`                  | `PHYSICS.md`                              | Rapier-WASM rigid body world       |
+| `assets.ts`                   | `ASSETS.md`                               | GLTF/OBJ/texture loader cache      |
+| `camera-rigs/fps.tsx`         | `camera-rigs/CAMERA-RIGS.md`              | First-person pointer-lock + WASD   |
+| `camera-rigs/third-person.tsx`| `camera-rigs/CAMERA-RIGS.md`              | Orbital follow camera              |
+| `camera-rigs/top-down.tsx`    | `camera-rigs/CAMERA-RIGS.md`              | Fixed-angle top-down               |
+| `camera-rigs/fixed.tsx`       | `camera-rigs/CAMERA-RIGS.md`              | Static scene-set camera            |
+| `ui/TileGrid3D.tsx`           | `ui/TILE-GRID-3D.md`                      | 3D tile board                      |
+| `ui/VoronoiInfluenceMap3D.tsx`| `ui/VORONOI-INFLUENCE-MAP-3D.md`          | 3D spheres-of-influence            |
+| `ui/GraphView3D.tsx`          | `ui/GRAPH-VIEW-3D.md`                     | 3D nodes + edges                   |
+
+Demo: `examples/_3d-demo/` (underscore-prefixed; internal; not promoted).
+
 ## Files
 
 ### `scene.tsx` — `ThreeScene` component
