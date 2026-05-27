@@ -18,7 +18,6 @@ import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { EffectDef } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
-import { summarize } from "../../src/lib/timeline";
 import { withPersistence } from "../../src/lib/persistence";
 import { effectsPattern, type EffectsBundle } from "../../src/lib/patterns/effects";
 
@@ -84,30 +83,61 @@ export class EffectsStage extends withPersistence<ChatStateType, InitStateType, 
   }
 
   render(): ReactElement {
-    const { effectStore, tick, events } = this.p;
+    const { effectStore, tick } = this.p;
     const now = tick.n;
     const active = effectStore.active();
+
+    // Map effect ids to player-readable names and prose lines.
+    const EFFECT_PROSE: Record<string, { name: string; feel: (dur: number | string, tags: string[]) => string }> = {
+      adrenaline: {
+        name: "Adrenaline rush",
+        feel: (dur, tags) =>
+          `Your heart pounds${tags.includes("focus") ? ", mind sharp" : ""}. ${dur === "∞" ? "Lasts until dispelled." : `Fades in ${dur} turn${dur === 1 ? "" : "s"}.`}`,
+      },
+      fireward: {
+        name: "Fire ward",
+        feel: (dur) =>
+          `A faint warmth clings to your skin, blunting heat. ${dur === "∞" ? "Persistent." : `Wanes in ${dur} turn${dur === 1 ? "" : "s"}.`}`,
+      },
+      nightroot: {
+        name: "Nightroot poison",
+        feel: (dur, tags) =>
+          `Your limbs feel heavy${tags.includes("sluggish") ? ", movements sluggish" : ""}. ${dur === "∞" ? "Lingers." : `Clears in ${dur} turn${dur === 1 ? "" : "s"}.`}`,
+      },
+      calm: {
+        name: "Calm draught",
+        feel: (dur) =>
+          `A cool stillness settles over you. ${dur === "∞" ? "Indefinite." : `Holds for ${dur} turn${dur === 1 ? "" : "s"}.`}`,
+      },
+    };
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Klio&apos;s bench — tick {now}</h3>
-        <h4>Active effects</h4>
-        {active.length === 0 ? <em style={{ opacity: 0.5 }}>none</em> : (
-          <ul>
-            {active.map((i) => {
-              const remaining = i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : "∞";
-              const mag = effectStore.magnitudesFor(i.id, now);
-              return (
-                <li key={i.id}>
-                  <b>{i.id}</b> ×{i.count} — remaining {String(remaining)} — {JSON.stringify(mag?.stats ?? {})} {mag?.tagsAdd?.join(",")}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <h4>Recent events</h4>
-        <pre style={{ background: "#000", padding: 8, maxHeight: 200, overflow: "auto" }}>
-{summarize(events.window(20), (e, at) => `${e}@${at}`) || "—"}
-        </pre>
+      <div style={{ padding: 12, fontFamily: "sans-serif", color: "#ddd", background: "#1a1a1a", maxWidth: 480 }}>
+        <h3 style={{ marginTop: 0, fontSize: "1rem", color: "#9ad" }}>Klio&apos;s Apothecary</h3>
+        {active.length === 0
+          ? <p style={{ color: "#666", fontStyle: "italic", fontSize: "0.9rem" }}>No tinctures are active.</p>
+          : (
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {active.map((i) => {
+                const remaining = i.def.duration != null ? Math.max(0, i.def.duration - (now - i.startTime)) : "∞";
+                const mag = effectStore.magnitudesFor(i.id, now);
+                const tags = mag?.tagsAdd ?? [];
+                const prose = EFFECT_PROSE[i.id];
+                return (
+                  <li key={i.id} style={{ marginBottom: 8 }}>
+                    <div style={{ fontWeight: "bold", fontSize: "0.9rem" }}>
+                      {prose?.name ?? i.id}
+                      {i.count > 1 && <span style={{ color: "#aaa", fontWeight: "normal", marginLeft: 4 }}>×{i.count}</span>}
+                    </div>
+                    <div style={{ color: "#bbb", fontSize: "0.85rem" }}>
+                      {prose ? prose.feel(remaining, tags) : `Remaining: ${String(remaining)} turns.`}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        }
       </div>
     );
   }
