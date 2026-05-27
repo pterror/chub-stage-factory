@@ -113,9 +113,12 @@ All Waves 1–3 items marked as "Wave N pending" in the table → 🚧 or 💭 p
 Changes: switched from `yarn install` to `bun install --frozen-lockfile`; added `bun run test`,
 `bun run test:smoke`, `bun run build:examples` steps.
 
-`bun run lint` **skipped**: `@typescript-eslint/eslint-plugin` is not in devDependencies and was
-already failing before this pass. The step is noted in a comment in the workflow yaml; add the
-package and re-enable before the next CI pass.
+`bun run lint` **enabled** (commit `067d88d`): `@typescript-eslint/eslint-plugin@^7.18.0` added,
+all surfaced errors fixed, and `bun run lint` wired into CI before `bun run test`. Rules disabled
+or overridden: `@typescript-eslint/no-explicit-any` off for five structural delegation wrappers;
+`react-refresh/only-export-components` off for all `examples/*/Stage.tsx` and runner files
+(required Chub Stage pattern); `react-hooks/exhaustive-deps` off for runner files and
+`voronoi-influence-map.tsx` (deliberate dep arrays). See § 12 for the full per-file fix log.
 
 ## 10. Vitest setup + canary test
 
@@ -126,24 +129,22 @@ package and re-enable before the next CI pass.
 - `src/lib/rng.test.ts` covers: `weightedPick` determinism with seeded stream, `weightedPick([])` throws, `pick` uniform-ish distribution.
 - CI: `bun run test` step added.
 
-## 11. Missing module docs — deferred inventory
+## 11. Missing module docs — completed (23 modules)
 
-Decision: inventory only in this pass; no docs written.
+Docs were written across three commits (`6584ad3`, `2bd2556`, `720a9d0`), covering all
+high-priority modules identified in the original inventory:
 
-### High-priority (exported, multi-caller, not @experimental)
+`action.ts`, `body.ts`, `chub-adapters.ts`, `classifier.ts`, `combat-realtime.ts`,
+`combat-turn.ts`, `constraints.ts`, `effects.ts`, `equipment.ts`, `fsm.ts`,
+`grid-inventory.ts`, `inventory.ts`, `observation.ts`, `physics.ts`, `prose-register.ts`,
+`replay.ts`, `rng.ts`, `snapshots.ts`, `stats.ts`, `tag-parser.ts`, `tags.ts`,
+`transformation.ts`, and the `3d/` subsystem (`3d/README.md`).
 
-- `action.ts`, `body.ts`, `chub-adapters.ts`, `classifier.ts`, `combat-realtime.ts`,
-  `combat-turn.ts`, `constraints.ts`, `effects.ts`, `equipment.ts`, `fsm.ts`,
-  `grid-inventory.ts`, `inventory.ts`, `observation.ts`, `physics.ts`, `prose-register.ts`,
-  `replay.ts`, `rng.ts`, `snapshots.ts`, `stats.ts`, `tag-parser.ts`, `tags.ts`,
-  `transformation.ts`
+### Still without docs
 
-### Low-priority (@experimental or internal helper)
-
-- `chat-window.ts` — @experimental, 0 callers
-- `embeddings.ts` — @experimental, 0 callers
-- `generate.ts` — **re-classified as production** (2 callers; @experimental removed)
-- `trigger.ts` — **re-classified as production** (2 callers; @experimental removed)
+- `embeddings.ts` — @experimental, 0 callers; no doc written
+- `chat-window.ts` — @experimental, 0 callers; covered by existing `CHAT-WINDOW.md`
+- `ui/voronoi-utils.ts` — internal helper; covered by `UI-VORONOI.md`
 
 ---
 
