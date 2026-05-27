@@ -86,6 +86,7 @@ export class TitsBodyStage extends withPersistence<ChatStateType, InitStateType,
           "TFs — render them as the gradual change they are.",
       },
     });
+    this.layers = this.p.layers;
     this.initStore(() => this.p.store);
   }
 

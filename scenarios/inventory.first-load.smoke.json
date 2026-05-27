@@ -1,0 +1,51 @@
+{
+  "name": "inventory first-load contract",
+  "description": "Verifies inventory stage renders non-empty content on zero state — before any player input.",
+  "exampleName": "inventory",
+  "init": {
+    "environment": "development",
+    "users": {
+      "0": {
+        "anonymizedId": "0",
+        "name": "Player",
+        "isRemoved": false,
+        "chatProfile": ""
+      }
+    },
+    "characters": {
+      "1": {
+        "anonymizedId": "1",
+        "name": "Pak",
+        "isRemoved": false,
+        "description": "A pack-rat shopkeeper.",
+        "personality": "Friendly. Acquisitive.",
+        "first_message": "Looking to buy or sell?",
+        "scenario": "A cluttered shop.",
+        "example_dialogs": "",
+        "tavern_personality": "",
+        "system_prompt": "",
+        "post_history_instructions": "",
+        "alternate_greetings": [],
+        "partial_extensions": {}
+      }
+    },
+    "config": null,
+    "messageState": null,
+    "chatState": null,
+    "initState": null
+  },
+  "steps": [],
+  "assertions": [
+    {
+      "kind": "noRenderError",
+      "when": "load",
+      "description": "render() must not throw on zero state"
+    },
+    {
+      "kind": "renderNonEmpty",
+      "when": "load",
+      "minLength": 10,
+      "description": "render() must produce >10 chars of visible text before any player input"
+    }
+  ]
+}

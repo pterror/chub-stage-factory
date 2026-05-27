@@ -1,0 +1,51 @@
+{
+  "name": "realtime-combat first-load contract",
+  "description": "Verifies realtime-combat stage renders non-empty content on zero state — before any player input.",
+  "exampleName": "realtime-combat",
+  "init": {
+    "environment": "development",
+    "users": {
+      "0": {
+        "anonymizedId": "0",
+        "name": "Player",
+        "isRemoved": false,
+        "chatProfile": ""
+      }
+    },
+    "characters": {
+      "1": {
+        "anonymizedId": "1",
+        "name": "Arena AI",
+        "isRemoved": false,
+        "description": "The arena's control system.",
+        "personality": "Cold. Tactical.",
+        "first_message": "Combat initialized. Drones incoming.",
+        "scenario": "An arena drone fight.",
+        "example_dialogs": "",
+        "tavern_personality": "",
+        "system_prompt": "",
+        "post_history_instructions": "",
+        "alternate_greetings": [],
+        "partial_extensions": {}
+      }
+    },
+    "config": null,
+    "messageState": null,
+    "chatState": null,
+    "initState": null
+  },
+  "steps": [],
+  "assertions": [
+    {
+      "kind": "noRenderError",
+      "when": "load",
+      "description": "render() must not throw on zero state"
+    },
+    {
+      "kind": "renderNonEmpty",
+      "when": "load",
+      "minLength": 10,
+      "description": "render() must produce >10 chars of visible text before any player input"
+    }
+  ]
+}
