@@ -39,6 +39,7 @@
     "node": "21.7.1"
   },
   "devDependencies": {
+    "@dimforge/rapier3d-compat": "^0.19.3",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.18.0",
     "@types/jsdom": "^28.0.3",

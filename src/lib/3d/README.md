@@ -1,9 +1,11 @@
-# `src/lib/3d/` — React Three Fiber scene wrapper
+# `src/lib/3d/` — React Three Fiber scene wrapper + Wave 2F substrate
 
-> @experimental — all three modules are used by 0-1 callers; APIs may change.
+Wave 2F 3D substrate. Modules in this directory cover scene mounting, physics
+(Rapier-WASM), asset loading (GLTF/OBJ/texture with caching), camera rigs
+(FPS/third-person/top-down/fixed), and 3D UI primitives (TileGrid3D,
+VoronoiInfluenceMap3D, GraphView3D).
 
-Three tightly-coupled files that together provide an embedded R3F canvas safe
-for Chub-iframe use. For usage recipes (lazy import, sizing, camera rigs,
+The R3F scene wrapper provides an embedded R3F canvas safe for Chub-iframe use. For usage recipes (lazy import, sizing, camera rigs,
 context loss, pointer events), see `src/lib/3D-SCENE.md`. For design
 rationale, see `src/lib/design/R3F-SCENE.md`.
 

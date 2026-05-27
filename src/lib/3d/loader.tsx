@@ -1,4 +1,4 @@
-// @experimental — used by 0-1 callers; API may change.
+// Wave 2F substrate — stable. See src/lib/3D-SCENE.md.
 import {ReactElement} from "react";
 
 /**
