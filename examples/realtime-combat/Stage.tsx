@@ -19,12 +19,13 @@
 
 import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { RealtimeWorld, AttackDef, RealtimeEvent } from "../../src/lib/combat-realtime";
+import { AttackDef, RealtimeWorld } from "../../src/lib/combat-realtime";
 import { Rng } from "../../src/lib/rng";
-import { Timeline, summarize } from "../../src/lib/timeline";
+import { realtimeCombatPattern } from "../../src/lib/patterns/realtime-combat";
+import { summarize } from "../../src/lib/timeline";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
-import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import { assembleObservations } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
   mergeResponses, shardOf, shard, withPersistence,
@@ -44,15 +45,13 @@ const ARENA = { w: 240, h: 160 };
 const ARENA_BOUNDS = { minX: 0, maxX: ARENA.w, minY: 0, maxY: ARENA.h };
 
 export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
-  world = new RealtimeWorld(48, ARENA_BOUNDS);
-  rng = Rng.fromSeed("arena");
+  combat = realtimeCombatPattern({ seed: 48, bounds: ARENA_BOUNDS, rngSeed: "arena" });
   tick = { n: 0, hp: 30 };
-  events = new Timeline<RealtimeEvent>({ id: "events", channels: ["auditory"], key: "last", windowSize: 15, saliencePer: 6, habituationTau: 1 });
   layers = createChubLayers();
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    this.world.add({ id: "you", pos: { x: ARENA.w / 2, y: ARENA.h / 2 }, vel: { x: 0, y: 0 }, radius: 6, team: "p", hp: this.tick.hp });
+    this.combat.world.add({ id: "you", pos: { x: ARENA.w / 2, y: ARENA.h / 2 }, vel: { x: 0, y: 0 }, radius: 6, team: "p", hp: this.tick.hp });
     for (let i = 0; i < 3; i++) this.spawnDrone(i);
 
     this.layers = createChubLayers({
@@ -60,20 +59,18 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
     this.initStore(() => new PersistenceStore({
-      rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
+      rng: shardOf("rng", this.combat.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, hp: i.hp }),
         (d: { n: number; hp: number }) => ({ n: d.n, hp: d.hp }),
         this.layers.messageStateBackend, chubTreeHistory()),
-      // RealtimeWorld.toJSON() serializes combatants; attacks are transient and not persisted.
-      // Mutate this.world in place on deserialize so existing render references stay valid.
-      world: shard("world", this.world,
+      world: shard("world", this.combat.world,
         (w) => w.toJSON(),
         (d: ReturnType<RealtimeWorld["toJSON"]>) => {
           const fresh = RealtimeWorld.fromJSON(d);
-          this.world.combatants.clear();
-          for (const [id, c] of fresh.combatants) this.world.combatants.set(id, c);
-          return this.world;
+          this.combat.world.combatants.clear();
+          for (const [id, c] of fresh.combatants) this.combat.world.combatants.set(id, c);
+          return this.combat.world;
         },
         this.layers.messageStateBackend, chubTreeHistory()),
     }));
@@ -85,32 +82,18 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
     const cx = ARENA.w / 2, cy = ARENA.h / 2;
     const px = cx + Math.cos(angle) * r;
     const py = cy + Math.sin(angle) * r;
-    this.world.add({
-      id: `drone-${i}-${this.rng.cosmetic.next()}`,
+    this.combat.world.add({
+      id: `drone-${i}-${this.combat.rng.cosmetic.next()}`,
       pos: { x: px, y: py }, vel: { x: (cx - px) * 0.2, y: (cy - py) * 0.2 },
       radius: 4, team: "e", hp: 4,
     });
   }
 
-  private observationSources(): ObservationSource<{ now: number }>[] {
-    return [
-      {
-        id: "world", channels: ["visual"], salience: () => 1, habituationTau: 0,
-        properties: { visual: {
-          combatants: () => [...this.world.combatants.values()].map((c) => ({
-            id: c.id, team: c.team, hp: c.hp, pos: { x: Math.round(c.pos.x), y: Math.round(c.pos.y) },
-          })),
-          attacks: () => this.world.attacks.length,
-        } },
-      },
-    ];
-  }
-
   private shoot(dx: number, dy: number, now: number) {
-    const you = this.world.combatants.get("you"); if (!you) return;
+    const you = this.combat.world.combatants.get("you"); if (!you) return;
     const m = Math.hypot(dx, dy) || 1;
     const nx = dx / m, ny = dy / m;
-    this.world.spawnAttack(BULLET, "you", {
+    this.combat.spawnAttack(BULLET, "you", {
       bounds: { circle: { x: you.pos.x, y: you.pos.y, r: 3 } },
       vel: { x: nx * 220, y: ny * 220 },
     }, now);
@@ -119,7 +102,7 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     this.tick.n += 1;
     const observed = assembleObservations(
-      [...this.observationSources(), this.events],
+      [...this.combat.observationSources(), this.combat.events],
       { now: this.tick.n }, { now: this.tick.n, maxCount: 3 },
     );
     const stageDirections = emitStageDirections({
@@ -142,14 +125,12 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
       const [dx, dy] = (r.parsed.shoot as string[]).map(Number);
       if (Number.isFinite(dx) && Number.isFinite(dy)) this.shoot(dx, dy, now);
     }
-    // Cull older entries; the timeline is append-only across messages but
-    // we only want this turn's beat to dominate prose.
-    this.events.clear();
+    this.combat.events.clear();
     for (let i = 0; i < 5; i++) {
-      for (const e of this.world.tick(0.1, now + i * 0.1)) this.events.push(e, now);
+      this.combat.tick(0.1, now + i * 0.1);
     }
     if (now % 3 === 0) this.spawnDrone(now);
-    const you = this.world.combatants.get("you");
+    const you = this.combat.world.combatants.get("you");
     if (you) this.tick.hp = you.hp;
     const stripped = r.stripped !== botMessage.content ? r.stripped : null;
     return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
@@ -160,15 +141,15 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
       <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
         <h3 style={{ marginTop: 0 }}>Arena — tick {this.tick.n} — HP {this.tick.hp}</h3>
         <svg width={480} height={320} viewBox={`0 0 ${ARENA.w} ${ARENA.h}`} style={{ background: "#1a1a22", border: "1px solid #444" }}>
-          {[...this.world.combatants.values()].map((c) => (
+          {[...this.combat.world.combatants.values()].map((c) => (
             <circle key={c.id} cx={c.pos.x} cy={c.pos.y} r={c.radius} fill={c.team === "p" ? "#7df" : c.hp > 0 ? "#f77" : "#444"} />
           ))}
-          {this.world.attacks.map((a) => a.bounds.circle && (
+          {this.combat.world.attacks.map((a) => a.bounds.circle && (
             <circle key={a.id} cx={a.bounds.circle.x} cy={a.bounds.circle.y} r={a.bounds.circle.r} fill="#ff8" />
           ))}
         </svg>
         <pre style={{ background: "#000", padding: 8, marginTop: 8, maxHeight: 160, overflow: "auto" }}>
-{summarize(this.events.all(), (e) => JSON.stringify(e)) || "—"}
+{summarize(this.combat.events.all(), (e) => JSON.stringify(e)) || "—"}
         </pre>
       </div>
     );

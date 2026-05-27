@@ -17,45 +17,43 @@
 
 import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { AABB, SpatialHash, aabbOverlap, resolvePositional } from "../../src/lib/physics";
+import { type AABB } from "../../src/lib/physics";
 import { Rng } from "../../src/lib/rng";
+import { physicsPattern, type PhysicsSimResult, type TrajectoryStep } from "../../src/lib/patterns/physics";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
-import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import { assembleObservations } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
   mergeResponses, shard, shardOf, withPersistence,
 } from "../../src/lib/persistence";
 
-interface TrajectoryStep { x: number; y: number; bounced: boolean }
 interface MessageStateType { ticks: number; lastTraj?: TrajectoryStep[]; [k: string]: unknown }
 type ChatStateType = null;
 type InitStateType = { [k: string]: unknown };
 type ConfigType = null;
 
 const ROOM: AABB = { x: 0, y: 0, w: 200, h: 120 };
-const OBSTACLES: { name: string; aabb: AABB }[] = [
+const OBSTACLES = [
   { name: "workbench", aabb: { x: 60, y: 40, w: 80, h: 20 } },
-  { name: "shelf", aabb: { x: 0, y: 90, w: 50, h: 12 } },
-  { name: "pillar", aabb: { x: 170, y: 20, w: 12, h: 80 } },
+  { name: "shelf",     aabb: { x: 0,  y: 90, w: 50, h: 12 } },
+  { name: "pillar",    aabb: { x: 170, y: 20, w: 12, h: 80 } },
 ];
 
 export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
-  hash = new SpatialHash<{ name: string; aabb: AABB }>(32);
-  rng = Rng.fromSeed("mara-studio");
+  phys = physicsPattern({ room: ROOM, obstacles: OBSTACLES, rngSeed: "mara-studio" });
   tick = { n: 0, lastTraj: undefined as TrajectoryStep[] | undefined };
-  lastResult?: { hit: string[]; final: AABB; steps: TrajectoryStep[] };
+  lastResult?: PhysicsSimResult;
   layers = createChubLayers();
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    for (const o of OBSTACLES) this.hash.insert(o, o.aabb);
     this.layers = createChubLayers({
       messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
     this.initStore(() => new PersistenceStore({
-      rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
+      rng: shardOf("rng", this.phys.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, lastTraj: i.lastTraj }),
         (d: { n: number; lastTraj?: TrajectoryStep[] }) => ({ n: d.n, lastTraj: d.lastTraj }),
@@ -63,61 +61,12 @@ export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, 
     }));
   }
 
-  private simulate(x: number, y: number, vx: number, vy: number): { hit: string[]; final: AABB; steps: TrajectoryStep[] } {
-    const proj: AABB = { x, y, w: 6, h: 6 };
-    const steps: TrajectoryStep[] = [{ x: proj.x, y: proj.y, bounced: false }];
-    const hit: string[] = [];
-    const dt = 0.1;
-    const friction = 0.92;
-    for (let i = 0; i < 60; i++) {
-      proj.x += vx * dt;
-      proj.y += vy * dt;
-      let bounced = false;
-      if (proj.x < ROOM.x) { proj.x = ROOM.x; vx = -vx * 0.6; bounced = true; }
-      if (proj.x + proj.w > ROOM.x + ROOM.w) { proj.x = ROOM.x + ROOM.w - proj.w; vx = -vx * 0.6; bounced = true; }
-      if (proj.y < ROOM.y) { proj.y = ROOM.y; vy = -vy * 0.6; bounced = true; }
-      if (proj.y + proj.h > ROOM.y + ROOM.h) { proj.y = ROOM.y + ROOM.h - proj.h; vy = -vy * 0.6; bounced = true; }
-      const candidates = this.hash.query(proj);
-      for (const c of candidates) {
-        if (!aabbOverlap(proj, c.aabb)) continue;
-        const adj = resolvePositional(proj, c.aabb);
-        proj.x += adj.ax; proj.y += adj.ay;
-        if (Math.abs(adj.ax) > Math.abs(adj.ay)) vx = -vx * 0.5; else vy = -vy * 0.5;
-        vx += this.rng.cosmetic.float() * 0.4 - 0.2;
-        bounced = true;
-        if (!hit.includes(c.name)) hit.push(c.name);
-      }
-      vx *= friction; vy *= friction;
-      steps.push({ x: Number(proj.x.toFixed(2)), y: Number(proj.y.toFixed(2)), bounced });
-      if (Math.abs(vx) < 0.5 && Math.abs(vy) < 0.5) break;
-    }
-    return { hit, final: { ...proj }, steps };
-  }
-
-  private observationSources(): ObservationSource<{ now: number }>[] {
-    return [
-      {
-        id: "room", channels: ["visual"], salience: () => 0.5, habituationTau: 20,
-        properties: { visual: {
-          room: () => ({ w: ROOM.w, h: ROOM.h }),
-          obstacles: () => OBSTACLES.map((o) => ({ name: o.name, ...o.aabb })),
-        } },
-      },
-      {
-        id: "last-throw", channels: ["visual"],
-        salience: () => (this.lastResult ? 1 : 0), habituationTau: 0,
-        properties: { visual: {
-          hit: () => this.lastResult?.hit ?? [],
-          ended_at: () => this.lastResult?.final ?? null,
-          steps_count: () => this.lastResult?.steps.length ?? 0,
-        } },
-      },
-    ];
-  }
-
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     this.tick.n += 1;
-    const observed = assembleObservations(this.observationSources(), { now: this.tick.n }, { now: this.tick.n, maxCount: 3 });
+    const observed = assembleObservations(
+      this.phys.observationSources(this.lastResult),
+      { now: this.tick.n }, { now: this.tick.n, maxCount: 3 },
+    );
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["arrival_sequence", "fragment_cascade"],
@@ -136,7 +85,7 @@ export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, 
     if (Array.isArray(r.parsed.throw) && r.parsed.throw.length === 4) {
       const [x, y, vx, vy] = (r.parsed.throw as string[]).map(Number);
       if ([x, y, vx, vy].every((n) => Number.isFinite(n))) {
-        this.lastResult = this.simulate(x, y, vx, vy);
+        this.lastResult = this.phys.simulate(x, y, vx, vy);
         this.tick.lastTraj = this.lastResult.steps;
       }
     }

@@ -18,12 +18,13 @@
 import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { Body } from "../../src/lib/body";
-import { TransformationDef, apply as applyTf } from "../../src/lib/transformation";
+import { TransformationDef } from "../../src/lib/transformation";
 import { EquipmentDef, Loadout, fromDict as eqFromDict } from "../../src/lib/equipment";
 import { Registry } from "../../src/lib/registry";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
-import { assembleObservations, ObservationSource } from "../../src/lib/observation";
+import { assembleObservations } from "../../src/lib/observation";
+import { cyberSlotsPattern } from "../../src/lib/patterns/cyber-slots";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
   mergeResponses, shard, shardOf, withPersistence,
@@ -59,19 +60,16 @@ const TFS = new Registry<TransformationDef>({
 });
 
 export class CyberSlotsStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
-  body: Body;
-  loadout: Loadout;
+  cyber = cyberSlotsPattern({
+    slots: { head: ["flesh-only", "hair-short"], torso: ["flesh-only", "skin-soft"] },
+    mods: MODS,
+    tfs: TFS,
+  });
   tick = { n: 0, lastAction: undefined as string | undefined };
   layers = createChubLayers();
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
-    this.body = new Body({
-      head: ["flesh-only", "hair-short"],
-      torso: ["flesh-only", "skin-soft"],
-    });
-    this.loadout = new Loadout(this.body);
-
     this.layers = createChubLayers({
       messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
       chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
@@ -81,51 +79,18 @@ export class CyberSlotsStage extends withPersistence<ChatStateType, InitStateTyp
         (i) => ({ n: i.n, lastAction: i.lastAction }),
         (d: { n: number; lastAction?: string }) => ({ n: d.n, lastAction: d.lastAction }),
         this.layers.messageStateBackend, chubTreeHistory()),
-      body: shardOf("body", this.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-      loadout: shard("loadout", this.loadout,
+      body: shardOf("body", this.cyber.body, (d) => Body.fromJSON(d), this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
+      loadout: shard("loadout", this.cyber.loadout,
         (i) => i.toJSON(),
-        (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.body, MODS.toJSON()),
+        (d: ReturnType<Loadout["toJSON"]>) => Loadout.fromJSON(d, this.cyber.body, MODS.toJSON()),
         this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
     }));
-  }
-
-  private observationSources(now: number): ObservationSource<{ now: number }>[] {
-    return [
-      {
-        id: "body-tags", channels: ["visual"], salience: () => 0.5, habituationTau: 4,
-        properties: { visual: { slots: () => {
-          const out: Record<string, string[]> = {};
-          for (const [s, t] of this.body.getAllEffectiveTags()) out[s] = t.toArray();
-          return out;
-        } } },
-      },
-      {
-        id: "equipped", channels: ["visual"],
-        salience: () => Math.min(1, this.loadout.getAllEquipped().size / 2), habituationTau: 6,
-        properties: { visual: {
-          mods: () => {
-            const out: Record<string, { id: string; fit: string; failed: string[] }> = {};
-            for (const [slot, inst] of this.loadout.getAllEquipped()) {
-              const f = this.loadout.fit(slot, now)!;
-              out[slot] = { id: inst.def.id, fit: f.fit, failed: f.failedTerms };
-            }
-            return out;
-          },
-          available: () => MODS.entries().map(([id, def]) => ({ id, slot: def.slot, constraints: def.constraints })),
-        } },
-      },
-      {
-        id: "violations", channels: ["interoceptive"],
-        salience: () => (this.loadout.checkAllConstraints().length > 0 ? 1 : 0), habituationTau: 0,
-        properties: { interoceptive: { current: () => this.loadout.checkAllConstraints() } },
-      },
-    ];
   }
 
   async beforePrompt(msg: Message): Promise<Partial<StageResponse<ChatStateType, MessageStateType>>> {
     this.tick.n += 1;
     const now = this.tick.n;
-    const observed = assembleObservations(this.observationSources(now), { now }, { now, maxCount: 4 });
+    const observed = assembleObservations(this.cyber.observationSources(now), { now }, { now, maxCount: 4 });
     const stageDirections = emitStageDirections({
       observations: observed,
       architectures: ["body_then_world", "conditional_inversion"],
@@ -150,15 +115,15 @@ export class CyberSlotsStage extends withPersistence<ChatStateType, InitStateTyp
     const r3 = parseTags<Record<string, unknown>>(text, { unequip: { kind: "string", enum: ["head", "torso"] } });
     text = r3.stripped;
     if (typeof r1.parsed.install === "string" && r1.parsed.install) {
-      applyTf(TFS.require(r1.parsed.install as string), this.body, now);
+      this.cyber.applyTf(r1.parsed.install as string, now);
       this.tick.lastAction = `installed:${r1.parsed.install}`;
     }
     if (typeof r2.parsed.equip === "string" && r2.parsed.equip) {
-      const res = this.loadout.equip(MODS.require(r2.parsed.equip as string), now);
+      const res = this.cyber.equip(r2.parsed.equip as string, now);
       this.tick.lastAction = res.ok ? `equipped:${r2.parsed.equip}` : `equip-failed:${(res as { reason: string }).reason}`;
     }
     if (typeof r3.parsed.unequip === "string" && r3.parsed.unequip) {
-      this.loadout.unequip(r3.parsed.unequip as string);
+      this.cyber.unequip(r3.parsed.unequip as string);
       this.tick.lastAction = `unequipped:${r3.parsed.unequip}`;
     }
     const stripped = text !== botMessage.content ? text : null;
@@ -172,19 +137,19 @@ export class CyberSlotsStage extends withPersistence<ChatStateType, InitStateTyp
         <h3 style={{ marginTop: 0 }}>Cull&apos;s table — tick {now}</h3>
         <h4>Body</h4>
         <table><tbody>
-          {this.body.getSlots().map((s) => (
-            <tr key={s}><td style={{ color: "#9ad", padding: "2px 8px" }}>{s}</td><td>{this.body.getEffectiveTags(s).toArray().join(", ")}</td></tr>
+          {this.cyber.body.getSlots().map((s) => (
+            <tr key={s}><td style={{ color: "#9ad", padding: "2px 8px" }}>{s}</td><td>{this.cyber.body.getEffectiveTags(s).toArray().join(", ")}</td></tr>
           ))}
         </tbody></table>
         <h4>Equipped</h4>
-        {this.loadout.getAllEquipped().size === 0 ? <em style={{ opacity: 0.5 }}>nothing</em> : (
-          <ul>{[...this.loadout.getAllEquipped()].map(([slot, inst]) => {
-            const f = this.loadout.fit(slot, now)!;
+        {this.cyber.loadout.getAllEquipped().size === 0 ? <em style={{ opacity: 0.5 }}>nothing</em> : (
+          <ul>{[...this.cyber.loadout.getAllEquipped()].map(([slot, inst]) => {
+            const f = this.cyber.loadout.fit(slot, now)!;
             return <li key={slot}><b>{inst.def.id}</b> on {slot} — fit: <span style={{ color: f.fit === "comfortable" ? "#9c9" : f.fit === "broken" ? "#e77" : "#dd8" }}>{f.fit}</span> {f.failedTerms.length ? `(failed: ${f.failedTerms.join(", ")})` : ""}</li>;
           })}</ul>
         )}
         <h4>Violations</h4>
-        <pre style={{ background: "#000", padding: 8 }}>{JSON.stringify(this.loadout.checkAllConstraints(), null, 2)}</pre>
+        <pre style={{ background: "#000", padding: 8 }}>{JSON.stringify(this.cyber.loadout.checkAllConstraints(), null, 2)}</pre>
         <div style={{ opacity: 0.7, fontSize: "0.85rem" }}>last: {this.tick.lastAction ?? "—"}</div>
       </div>
     );
