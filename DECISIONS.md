@@ -3,7 +3,33 @@
 
 ## 1. `withPersistence` HOC
 
-`withPersistence` is a class-factory HOC (not a mixin or base-class override) that wraps `StageBase` and delegates the three repeated lifecycle methods — `load`, `setState`, `beforePrompt`, `afterResponse` — to a caller-supplied `PersistenceStore` + `ChubLayers`. The HOC handles two shapes that appeared in the eight examples: (a) the simple five-field pattern (`{ success: true, error: null, initState: null, chatState, messageState }`) used by inventory, effects, tits-body, turn-combat, and cyber-slots; and (b) the mirror-read pattern used by physics, realtime-combat, and composite-showcase, which reads `this.layers.mirror` directly and may include `initState` or a non-null `chatState`. Shape (b) cannot be absorbed without adding mirror-read options that would make the HOC as verbose as the boilerplate — those three examples are left as-is per the spec. `effects` uses `this.pStore` / `this.bound` naming but is otherwise shape (a) and is migrated. All five migrated examples no longer declare `store`, `bound`, `load`, or `setState` locally.
+`withPersistence` is a class-factory HOC (not a mixin or base-class override) that wraps `StageBase` and delegates the three repeated lifecycle methods — `load`, `setState`, `beforePrompt`, `afterResponse` — to a caller-supplied `PersistenceStore` + `ChubLayers`. `effects` uses `this.pStore` / `this.bound` naming but is otherwise the standard shape and was migrated in the initial pass.
+
+### Initial limitation (now fixed)
+
+The original HOC hardcoded `initState: null` in its `load()` return and sourced `chatState` only from `bound.initial()`. This blocked three examples that seed an `initState` shard or carry a non-null `chatState` (`physics`, `realtime-combat`, `composite-showcase`) — they read `this.layers.mirror` directly after calling `bound.initial()`, bypassing the HOC.
+
+### Extension — mirror-read in `load()`
+
+After `store.load()` + `bound.initial()`, all three layer mirrors (`initState`, `chatState`, `messageState`) are populated from whatever shards the constructor wired up. The fix: read all three from `this.layers.mirror` in the HOC's `load()` instead of hardcoding `null`. No new method, no config knob, no second HOC — the HOC already held `this.layers`.
+
+```ts
+// HOC load() — after this fix:
+await this.store.load();
+await this.bound.initial();
+return {
+  success: true, error: null,
+  initState: (this.layers.mirror.initState as I | null) ?? null,
+  chatState: (this.layers.mirror.chatState as C | null) ?? null,
+  messageState: (this.layers.mirror.messageState as M | null) ?? null,
+};
+```
+
+Examples that use only `messageStateBackend` shards see `initState: null` and `chatState: null` as before — no behaviour change.
+
+### Result
+
+All 8 examples now use the composer. None declare `store`, `bound`, `load`, or `setState` locally.
 
 ## 2. Script consolidation (promote-example)
 

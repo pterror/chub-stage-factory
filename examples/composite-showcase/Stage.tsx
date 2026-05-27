@@ -38,8 +38,7 @@
  */
 
 import { ReactElement } from "react";
-import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
+import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { Body } from "../../src/lib/body";
 import { TransformationDef, apply as applyTf } from "../../src/lib/transformation";
 import { EquipmentDef, Loadout, fromDict as eqFromDict } from "../../src/lib/equipment";
@@ -55,7 +54,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching, noHistory,
-  bindStore, mergeResponses, shard, shardOf,
+  mergeResponses, shard, shardOf, withPersistence,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; mode: "shop" | "combat" | "ended"; lastAction?: string; [k: string]: unknown }
@@ -143,7 +142,7 @@ function restoreCombatants(holder: { cs: Combatant[]; ended?: "pc-down" | "enemy
   holder.ended = data.ended;
 }
 
-export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
+export class CompositeShowcaseStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
   body: Body;
   loadout: Loadout;
   inv: Inventory;
@@ -153,8 +152,6 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
   tick = { n: 0, mode: "shop" as "shop" | "combat" | "ended", lastAction: undefined as string | undefined };
   pcChoice: "swing" | "hack" = "swing";
   layers = createChubLayers();
-  store!: PersistenceStore;
-  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
   slotMsg: string | null = null;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
@@ -181,7 +178,7 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
       chatState: (data.chatState as Record<string, string | undefined> | null) ?? null,
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
-    this.store = new PersistenceStore({
+    this.initStore(() => new PersistenceStore({
       rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, mode: i.mode, lastAction: i.lastAction }),
@@ -197,23 +194,7 @@ export class CompositeShowcaseStage extends StageBase<InitStateType, ChatStateTy
           return this.combatantsHolder;
         },
         this.layers.chatStateBackend, forbidBranching(snapshotHistory())),
-    });
-    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
-  }
-
-  async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    await this.store.load();
-    await this.bound.initial();
-    return {
-      success: true, error: null,
-      initState: (this.layers.mirror.initState as InitStateType | null) ?? null,
-      chatState: (this.layers.mirror.chatState as ChatStateType | null) ?? null,
-      messageState: (this.layers.mirror.messageState as MessageStateType | null) ?? null,
-    };
-  }
-
-  async setState(state: MessageStateType): Promise<void> {
-    await this.bound.setState(state);
+    }));
   }
 
   private grantsForEquipped(): { tags: string[]; effects: EffectDef[] } {

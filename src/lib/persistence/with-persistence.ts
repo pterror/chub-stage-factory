@@ -1,10 +1,14 @@
 /*
  * persistence/with-persistence.ts — HOC that eliminates the load/setState
- *                                    boilerplate shared by most examples.
+ *                                    boilerplate shared by all examples.
  *
- * WHAT: `withPersistence(store, layers)` returns a class that extends
- *       StageBase and wires the standard three methods:
- *         - load()      → store.load() → bound.initial() → { success, chatState, messageState }
+ * WHAT: `withPersistence()` returns a class that extends StageBase and wires
+ *       the standard three methods:
+ *         - load()      → store.load() → bound.initial()
+ *                         → { success, initState, chatState, messageState }
+ *                         (all three layer values read from this.layers.mirror
+ *                          after hydration, so initState and chatState are
+ *                          populated for every persistence shape)
  *         - setState()  → bound.setState(state)
  *         - (beforePrompt / afterResponse are inherited helpers via `bound`)
  *
@@ -12,12 +16,16 @@
  *       needs to implement beforePrompt, afterResponse, and render.
  *
  * WHY: The five-line load()/setState() block is copy-pasted in every
- *      example that uses the simple messageState-only persistence shape.
- *      `withPersistence` removes ~15 lines per example with no behaviour
- *      change.
+ *      example that uses the persistence pattern.  The original HOC hardcoded
+ *      `initState: null` and read `chatState` only from `bound.initial()`,
+ *      which broke examples that seed an initState shard (physics,
+ *      realtime-combat, composite-showcase) or carry a non-null chatState
+ *      (composite-showcase). The fix: read all three mirrors after store.load()
+ *      + bound.initial() — the mirrors are populated at that point regardless
+ *      of which backends each example uses.
  *
  * SHAPE:
- *   withPersistence<C, I, M, Ch>(store, layers): abstract class that extends
+ *   withPersistence<C, I, M, Ch>(): abstract class that extends
  *     StageBase<I, C, M, Ch> and implements load + setState.
  *
  *   The returned class exposes:
@@ -25,10 +33,8 @@
  *     this.bound: BoundStore<C, M>  (from bindStore)
  *
  * WHEN NOT TO USE:
- *   - If load() also reads this.layers.mirror directly to build initState
- *     or a non-null chatState (physics, realtime-combat, composite-showcase).
- *   - If load() does extra work before store.load() (custom hydration order).
- *   Use the manual pattern in those cases.
+ *   - If load() must do extra work BEFORE store.load() (custom hydration order).
+ *   Use the manual pattern in that case only.
  */
 
 import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
@@ -43,10 +49,15 @@ export { mergeResponses };
 type ChubLayers = ReturnType<typeof createChubLayers>;
 
 /**
- * Returns a StageBase subclass with `load` and `setState` pre-wired for the
- * standard messageState-only persistence shape:
+ * Returns a StageBase subclass with `load` and `setState` pre-wired for any
+ * standard persistence shape (messageState-only, initState+messageState, or
+ * all three layers):
  *
- *   load()     → store.load() → bound.initial() → { success: true, error: null, initState: null, chatState, messageState }
+ *   load()     → store.load() → bound.initial()
+ *                → { success: true, error: null,
+ *                    initState: mirror.initState,   ← populated if initState shards present
+ *                    chatState: mirror.chatState,   ← populated if chatState shards present
+ *                    messageState: mirror.messageState }
  *   setState() → bound.setState(state)
  *
  * Subclass must still implement `beforePrompt`, `afterResponse`, and `render`.
@@ -91,8 +102,20 @@ export function withPersistence<C, I, M, Ch>() {
 
     async load(): Promise<Partial<LoadResponse<I, C, M>>> {
       await this.store.load();
-      const { chatState, messageState } = await this.bound.initial();
-      return { success: true, error: null, initState: null as unknown as I, chatState, messageState };
+      await this.bound.initial();
+      // Read all three mirrors after hydration. store.load() + bound.initial()
+      // populate the mirrors from every shard's backend (initState, chatState,
+      // messageState). Reading the mirror here covers:
+      //   - simple messageState-only examples (initState/chatState stay null)
+      //   - examples with an initState shard (physics, realtime-combat)
+      //   - examples with a chatState shard (composite-showcase)
+      return {
+        success: true,
+        error: null,
+        initState: (this.layers.mirror.initState as I | null) ?? null,
+        chatState: (this.layers.mirror.chatState as C | null) ?? null,
+        messageState: (this.layers.mirror.messageState as M | null) ?? null,
+      };
     }
 
     async setState(state: M): Promise<void> {

@@ -16,8 +16,7 @@
  */
 
 import { ReactElement } from "react";
-import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
+import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { AABB, SpatialHash, aabbOverlap, resolvePositional } from "../../src/lib/physics";
 import { Rng } from "../../src/lib/rng";
 import { parseTags } from "../../src/lib/tag-parser";
@@ -25,7 +24,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
-  bindStore, mergeResponses, shard, shardOf,
+  mergeResponses, shard, shardOf, withPersistence,
 } from "../../src/lib/persistence";
 
 interface TrajectoryStep { x: number; y: number; bounced: boolean }
@@ -41,14 +40,12 @@ const OBSTACLES: { name: string; aabb: AABB }[] = [
   { name: "pillar", aabb: { x: 170, y: 20, w: 12, h: 80 } },
 ];
 
-export class PhysicsStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
+export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
   hash = new SpatialHash<{ name: string; aabb: AABB }>(32);
   rng = Rng.fromSeed("mara-studio");
   tick = { n: 0, lastTraj: undefined as TrajectoryStep[] | undefined };
   lastResult?: { hit: string[]; final: AABB; steps: TrajectoryStep[] };
   layers = createChubLayers();
-  store!: PersistenceStore;
-  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
@@ -57,29 +54,13 @@ export class PhysicsStage extends StageBase<InitStateType, ChatStateType, Messag
       messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
-    this.store = new PersistenceStore({
+    this.initStore(() => new PersistenceStore({
       rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, lastTraj: i.lastTraj }),
         (d: { n: number; lastTraj?: TrajectoryStep[] }) => ({ n: d.n, lastTraj: d.lastTraj }),
         this.layers.messageStateBackend, chubTreeHistory()),
-    });
-    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
-  }
-
-  async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    await this.store.load();
-    await this.bound.initial();
-    return {
-      success: true, error: null,
-      initState: (this.layers.mirror.initState as InitStateType | null) ?? null,
-      chatState: null,
-      messageState: (this.layers.mirror.messageState as MessageStateType | null) ?? null,
-    };
-  }
-
-  async setState(state: MessageStateType): Promise<void> {
-    await this.bound.setState(state);
+    }));
   }
 
   private simulate(x: number, y: number, vx: number, vy: number): { hit: string[]; final: AABB; steps: TrajectoryStep[] } {

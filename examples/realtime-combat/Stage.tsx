@@ -18,8 +18,7 @@
  */
 
 import { ReactElement } from "react";
-import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
+import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { RealtimeWorld, AttackDef, RealtimeEvent, RealtimeCombatant } from "../../src/lib/combat-realtime";
 import { Rng } from "../../src/lib/rng";
 import { Timeline, summarize } from "../../src/lib/timeline";
@@ -28,7 +27,7 @@ import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations, ObservationSource } from "../../src/lib/observation";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
-  bindStore, mergeResponses, shardOf, shard,
+  mergeResponses, shardOf, shard, withPersistence,
 } from "../../src/lib/persistence";
 
 interface MessageStateType { ticks: number; hp: number; [k: string]: unknown }
@@ -44,14 +43,12 @@ const BULLET: AttackDef = {
 const ARENA = { w: 240, h: 160 };
 const ARENA_BOUNDS = { minX: 0, maxX: ARENA.w, minY: 0, maxY: ARENA.h };
 
-export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType> {
+export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
   world = new RealtimeWorld(48, ARENA_BOUNDS);
   rng = Rng.fromSeed("arena");
   tick = { n: 0, hp: 30 };
   events = new Timeline<RealtimeEvent>({ id: "events", channels: ["auditory"], key: "last", windowSize: 15, saliencePer: 6, habituationTau: 1 });
   layers = createChubLayers();
-  store!: PersistenceStore;
-  bound!: ReturnType<typeof bindStore<ChatStateType, MessageStateType>>;
 
   constructor(data: InitialData<InitStateType, ChatStateType, MessageStateType, ConfigType>) {
     super(data);
@@ -62,7 +59,7 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
       messageState: (data.messageState as Record<string, string | undefined> | null) ?? null,
       initState: (data.initState as Record<string, string | undefined> | null) ?? null,
     });
-    this.store = new PersistenceStore({
+    this.initStore(() => new PersistenceStore({
       rng: shardOf("rng", this.rng, (d) => Rng.fromJSON(d), this.layers.initStateBackend, noHistory()),
       tick: shard("tick", this.tick,
         (i) => ({ n: i.n, hp: i.hp }),
@@ -79,8 +76,7 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
           return this.world;
         },
         this.layers.messageStateBackend, chubTreeHistory()),
-    });
-    this.bound = bindStore<ChatStateType, MessageStateType>(this.store, { layers: this.layers });
+    }));
   }
 
   private spawnDrone(i: number) {
@@ -94,21 +90,6 @@ export class RealtimeCombatStage extends StageBase<InitStateType, ChatStateType,
       pos: { x: px, y: py }, vel: { x: (cx - px) * 0.2, y: (cy - py) * 0.2 },
       radius: 4, team: "e", hp: 4,
     });
-  }
-
-  async load(): Promise<Partial<LoadResponse<InitStateType, ChatStateType, MessageStateType>>> {
-    await this.store.load();
-    await this.bound.initial();
-    return {
-      success: true, error: null,
-      initState: (this.layers.mirror.initState as InitStateType | null) ?? null,
-      chatState: null,
-      messageState: (this.layers.mirror.messageState as MessageStateType | null) ?? null,
-    };
-  }
-
-  async setState(state: MessageStateType): Promise<void> {
-    await this.bound.setState(state);
   }
 
   private observationSources(): ObservationSource<{ now: number }>[] {
