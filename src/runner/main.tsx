@@ -10,7 +10,7 @@
  * Main split: iframe panel (left) + Inspector (right).
  */
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { createRoot } from "react-dom/client";
 import { IframeHost } from "./IframeHost.js";
 import { Inspector } from "./Inspector.js";

@@ -29,6 +29,7 @@ export class TestCounterStage extends StageBase<null, null, CounterState, Counte
 
   constructor(data: InitialData<null, null, CounterState, CounterConfig>) {
     super(data);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const id = (data.config as any)?.instanceId ?? "counter";
     this.ms = data.messageState ?? {
       count: 0,

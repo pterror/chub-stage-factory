@@ -1,4 +1,3 @@
-// @experimental — used by 0-1 callers; API may change.
 /*
  * generate.ts — LLM-call primitive with schema + retry + cache.
  *

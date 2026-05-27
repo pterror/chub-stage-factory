@@ -28,7 +28,7 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      # lint skipped: @typescript-eslint/eslint-plugin missing from devDependencies; add it before re-enabling.
+      - run: bun run lint
       - run: bun run test
       - run: bun run test:smoke
       - run: bun run build:examples

@@ -95,7 +95,6 @@ export function ThreeScene(props: ThreeSceneProps): ReactElement {
     if (process.env.NODE_ENV === "production") return;
     const parent = wrapperRef.current?.parentElement;
     if (parent && parent.offsetHeight === 0) {
-      // eslint-disable-next-line no-console
       console.warn(
         "[ThreeScene] parentElement.offsetHeight === 0 at mount. The Canvas " +
           "will fall back to 300x150 and may not recover. Give the parent an " +

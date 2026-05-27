@@ -216,8 +216,9 @@ export class RecordReplayMocks implements MockSurface {
   private loadFixturesFromDir(dir: string): void {
     // Node-only: dynamic require to keep browser-safe
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { readdirSync, readFileSync } = require("node:fs");
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { join } = require("node:path");
       const files: string[] = readdirSync(dir).filter((f: string) => f.endsWith(".json"));
       for (const file of files) {
@@ -233,8 +234,9 @@ export class RecordReplayMocks implements MockSurface {
   private persistFixture(key: string, value: unknown): void {
     if (!this.fixtureDir) return;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { mkdirSync, writeFileSync } = require("node:fs");
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { join } = require("node:path");
       mkdirSync(this.fixtureDir, { recursive: true });
       const filename = key.replace(/:/g, "__") + ".json";

@@ -37,7 +37,7 @@
  *   Use the manual pattern in that case only.
  */
 
-import { StageBase, StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
+import { StageBase, StageResponse, Message } from "@chub-ai/stages-ts";
 import { LoadResponse } from "@chub-ai/stages-ts/dist/types/load";
 import { PersistenceStore } from "./store";
 import { bindStore, createChubLayers, type BoundStore } from "./chub";

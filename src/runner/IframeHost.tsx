@@ -6,7 +6,7 @@
  */
 
 import React, { useRef, useEffect, useImperativeHandle, forwardRef, useCallback } from "react";
-import type { HostMessage, InitData, OutboundMessage, OutboundMessageType, GenerationRequestType, MessagingRequestType } from "./protocol.js";
+import type { HostMessage, InitData, GenerationRequestType, MessagingRequestType } from "./protocol.js";
 import type { MockSurface } from "./mocks.js";
 
 export interface MessageLogEntry {

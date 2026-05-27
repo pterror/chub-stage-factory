@@ -23,7 +23,7 @@ export interface QuietGenerationSubCallOptions<S> {
   onResult?: (id: string, result: string, state: S) => Partial<S> | void;
 }
 
-export interface QuietState<S> {
+export interface QuietState {
   lastQuiet?: string;
 }
 
@@ -34,10 +34,10 @@ function render(template: QuietPromptTemplate, ctx: Record<string, string>): str
 
 export function quietGenerationSubCallPattern<S>(
   opts: QuietGenerationSubCallOptions<S>,
-): ComposedSubsystem<QuietState<S>> & {
+): ComposedSubsystem<QuietState> & {
   runQuietNamed: (id: string, ctx?: Record<string, string>) => Promise<string>;
 } {
-  const state: QuietState<S> = {};
+  const state: QuietState = {};
 
   async function runQuietNamed(id: string, ctx: Record<string, string> = {}): Promise<string> {
     const template = opts.prompts[id];

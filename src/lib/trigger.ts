@@ -1,4 +1,3 @@
-// @experimental — used by 0-1 callers; API may change.
 /*
  * trigger.ts — conditional probabilistic triggers + TriggerSet.
  *

@@ -110,7 +110,7 @@ const DEFAULT_HOVER_DURATION_MS = 240;
 const DEFAULT_ENTRY_DURATION_MS = 700;
 const DEFAULT_EXPAND_DURATION_MS = 520;
 const TOUCH_FALLBACK_RADIUS = 26;
-const RAF_SETTLE_THRESHOLD = 0.5;
+// RAF_SETTLE_THRESHOLD = 0.5 — reserved for future adaptive-framerate settling logic
 
 // ---------------------------------------------------------------------------
 // Component
@@ -127,7 +127,7 @@ export function VoronoiInfluenceMap<E>(
     onEntityClick,
     onEntityHover,
     onEntityActivate,
-    onEntityDeactivate,
+    onEntityDeactivate: _onEntityDeactivate,
     renderCell,
   } = props;
 
@@ -187,7 +187,6 @@ export function VoronoiInfluenceMap<E>(
       const dt = prevTimeRef.current != null ? now - prevTimeRef.current : 16;
       prevTimeRef.current = now;
       const map = animatedRef.current;
-      const t = now; // absolute time in ms for sine waves
 
       let anyMotion = false;
 
@@ -308,7 +307,7 @@ export function VoronoiInfluenceMap<E>(
     _idx: i,
   }));
 
-  let voronoiPolygons: (Polygon | null)[] = pulsedPoints.map(() => null);
+  const voronoiPolygons: (Polygon | null)[] = pulsedPoints.map(() => null);
 
   if (sites.length > 0) {
     try {

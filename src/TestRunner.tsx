@@ -14,21 +14,24 @@ export interface TestStageRunnerProps<StageType extends StageBase<InitStateType,
     outside the context of an active chat. See runTests() below for the main idea.
  ***/
 export const TestStageRunner = <StageType extends StageBase<InitStateType, ChatStateType, MessageStateType, ConfigType>,
-    InitStateType, ChatStateType, MessageStateType, ConfigType>({ factory }: TestStageRunnerProps<StageType, InitStateType, ChatStateType, MessageStateType, ConfigType>) => {
+    InitStateType, ChatStateType, MessageStateType, ConfigType>({ factory: _factory }: TestStageRunnerProps<StageType, InitStateType, ChatStateType, MessageStateType, ConfigType>) => {
 
     // You may need to add a @ts-ignore here,
     //     as the linter doesn't always like the idea of reading types arbitrarily from files
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
     // @ts-ignore
     const [stage, _setStage] = useState(new Stage({...DEFAULT_INITIAL, ...InitData}));
 
     // This is what forces the stage node to re-render.
     const [node, setNode] = useState(new Date());
 
-    function refresh() {
+    // _refresh and _delayedTest are used in the commented-out runTests snippets below
+    function _refresh() {
         setNode(new Date());
     }
 
-    async function delayedTest(test: any, delaySeconds: number) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async function _delayedTest(test: any, delaySeconds: number) {
         await new Promise(f => setTimeout(f, delaySeconds * 1000));
         return test();
     }

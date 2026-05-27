@@ -76,6 +76,21 @@ Rule documented in `src/lib/CONVENTIONS.md`. No code changes in this pass — co
 `scheduler.ts` — skipped (deleted by parallel agent, item 3 above).
 `timeline.ts` — **skipped**: grep found 4 callers (scene.ts, patterns/scene.ts, context.ts, patterns/synergy/semantic-recall-overlay.ts), which exceeds the 0-1 threshold. Audit claim was incorrect; not marked.
 
+### Corrected caller counts (re-audit pass, 2026-05-27)
+
+The prior audit undercounted callers for `trigger.ts` and `generate.ts` by excluding `.tsx` files
+and example stages. Actual callers in `.ts`/`.tsx` production code:
+
+| File | Prior count | Actual callers | Re-classified |
+|------|-------------|----------------|---------------|
+| `src/lib/trigger.ts` | 1 | 2 (`examples/world-primary/Stage.tsx` + `src/lib/patterns/freeform-pipeline.ts`) | `@experimental` removed |
+| `src/lib/generate.ts` | 1 | 2 (`examples/world-primary/Stage.tsx` + `src/lib/patterns/freeform-pipeline.ts`) | `@experimental` removed |
+| `src/lib/chat-window.ts` | 0 | 0 (docs only) | kept `@experimental` |
+| `src/lib/embeddings.ts` | 0 | 1 (`src/lib/patterns/synergy/semantic-recall-overlay.ts`) but that file itself has 0 callers | kept `@experimental` |
+| `src/lib/3d/scene.tsx` | 0 | 0 | kept `@experimental` |
+| `src/lib/3d/loader.tsx` | 0 | 0 | kept `@experimental` |
+| `src/lib/3d/use-three-handle.ts` | 0 | 0 | kept `@experimental` |
+
 ## 8. ROADMAP status markers
 
 **Decision:** Option C — add ✅/🚧/💭 markers per item; no restructure.
@@ -127,5 +142,46 @@ Decision: inventory only in this pass; no docs written.
 
 - `chat-window.ts` — @experimental, 0 callers
 - `embeddings.ts` — @experimental, 0 callers
-- `generate.ts` — @experimental, 1 caller chain
-- `trigger.ts` — @experimental, 1 caller
+- `generate.ts` — **re-classified as production** (2 callers; @experimental removed)
+- `trigger.ts` — **re-classified as production** (2 callers; @experimental removed)
+
+---
+
+<!-- Lint + @experimental re-audit pass — 2026-05-27 -->
+
+## 12. Lint: `@typescript-eslint/eslint-plugin` added; CI enabled
+
+**Decision:** Add `@typescript-eslint/eslint-plugin@^7.18.0` (matching parser major), fix all
+surfaced errors, disable rules only where the pattern is structural and judgment would be required.
+
+### Fixed directly
+
+| Location | Issue |
+|----------|-------|
+| `examples/realtime-combat/Stage.tsx` | Removed unused `RealtimeCombatant` import |
+| `src/TestRunner.tsx` | Renamed `factory`→`_factory`, `refresh`→`_refresh`, `delayedTest`→`_delayedTest`; suppressed `@ts-ignore` with eslint-disable |
+| `src/runner/mocks.ts` | Changed `no-require-imports` disable comments to `no-var-requires` (rule renamed in plugin v7) |
+| `src/lib/3d/scene.tsx` | Removed stale `no-console` eslint-disable comment |
+| `src/lib/persistence/with-persistence.ts` | Removed unused `InitialData` import |
+| `src/runner/main.tsx` | Removed unused `useEffect` import |
+| `src/runner/IframeHost.tsx` | Removed unused `OutboundMessage`, `OutboundMessageType` imports |
+| `src/lib/ui/voronoi-influence-map.tsx` | Changed `let voronoiPolygons` to `const`; removed dead `t` alias; converted `RAF_SETTLE_THRESHOLD` to comment; renamed `onEntityDeactivate` to `_onEntityDeactivate` |
+| `src/lib/patterns/synergy/quiet-generation-sub-call.ts` | Removed unused `<S>` type param from `QuietState` (not referenced in body) |
+| `vite.config.ts` | Removed unused `command` from config destructure |
+| `examples/_test-counter/Stage.tsx` | Added per-line eslint-disable for structural `any` cast |
+| `src/lib/equipment.ts` | Added per-line eslint-disable for structural `any` cast |
+
+### Configured via `.eslintrc.cjs`
+
+- `@typescript-eslint/no-unused-vars`: configured to ignore `_`-prefixed identifiers
+  (handles intentional unused params like `_msg`, `_ctx`, `_now`, `_state`, `_id`)
+- `@typescript-eslint/no-explicit-any`: disabled for `src/Stage.tsx`,
+  `src/composition/CompositionRunner.ts`, `src/composition/merge.ts`,
+  `src/lib/persistence/chub.ts`, `src/lib/persistence/store.ts` — these are intentional
+  untyped delegation wrappers over generic `StageBase<I,C,M,Config>` type parameters.
+- `react-refresh/only-export-components`: disabled for `examples/*/Stage.tsx` and runner files
+  — Chub Stage files structurally export one class alongside React helpers in one file.
+- `react-hooks/exhaustive-deps`: disabled for runner files and `voronoi-influence-map.tsx`
+  — dep arrays are deliberately incomplete (`addEntry` is stable by construction;
+  `hoverConfig`/`entryConfig` wrapping in `useMemo` deferred to avoid changing animation
+  behaviour in this pass).

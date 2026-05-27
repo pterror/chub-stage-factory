@@ -173,6 +173,7 @@ export class Loadout {
     now: number,
   ): { ok: true; slot: string } | { ok: false; reason: string; detail?: unknown } {
     const c = canEquip(def, this._body);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (!c.ok) return { ok: false, reason: c.reason, detail: (c as any).detail };
     if (this._equipped.has(def.slot)) this.unequip(def.slot);
     const snapshotTags = this._body.getEffectiveTags(def.slot).toArray();

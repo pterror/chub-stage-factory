@@ -19,7 +19,7 @@
 
 import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
-import { RealtimeWorld, AttackDef, RealtimeEvent, RealtimeCombatant } from "../../src/lib/combat-realtime";
+import { RealtimeWorld, AttackDef, RealtimeEvent } from "../../src/lib/combat-realtime";
 import { Rng } from "../../src/lib/rng";
 import { Timeline, summarize } from "../../src/lib/timeline";
 import { parseTags } from "../../src/lib/tag-parser";
