@@ -93,21 +93,79 @@ export class PhysicsStage extends withPersistence<ChatStateType, InitStateType, 
     return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
   }
 
+  /** Click-to-throw: player clicks a point in the atelier SVG; we launch
+   *  from centre with velocity toward the clicked point. Routes directly to
+   *  simulate() — the LLM narrates throws it emitted via <throw> only.
+   *
+   *  Primitive gap: no StageIntrospect invokeVerb("throw", {x,y,vx,vy}) yet.
+   *  A future wiring would let the LLM narrate click-throws too, and let
+   *  scripts/explore-stage.mjs drive this interaction from the CLI.
+   */
+  private handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const svg = e.currentTarget;
+    const rect = svg.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * ROOM.w;
+    const svgY = ((e.clientY - rect.top) / rect.height) * ROOM.h;
+    const cx = ROOM.w / 2, cy = ROOM.h / 2;
+    const dx = svgX - cx, dy = svgY - cy;
+    const speed = 80;
+    const m = Math.hypot(dx, dy) || 1;
+    this.lastResult = this.phys.simulate(cx, cy, (dx / m) * speed, (dy / m) * speed);
+    this.tick.lastTraj = this.lastResult.steps;
+  };
+
   render(): ReactElement {
+    const last = this.lastResult;
+    const endpoint = last?.steps.at(-1);
+    const hitList = last?.hit ?? [];
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Atelier — tick {this.tick.n}</h3>
-        <svg width={400} height={240} viewBox="0 0 200 120" style={{ background: "#222", border: "1px solid #444" }}>
-          {OBSTACLES.map((o) => (
-            <rect key={o.name} x={o.aabb.x} y={o.aabb.y} width={o.aabb.w} height={o.aabb.h} fill="#555" />
-          ))}
-          {this.lastResult?.steps.map((s, i) => (
-            <circle key={i} cx={s.x + 3} cy={s.y + 3} r={s.bounced ? 1.5 : 0.8} fill={s.bounced ? "#fb8" : "#8fc"} />
-          ))}
-        </svg>
-        <div style={{ marginTop: 8 }}>
-          {this.lastResult ? <>hit: <b>{this.lastResult.hit.join(", ") || "—"}</b> · steps: {this.lastResult.steps.length}</> : <em>no throws yet</em>}
+      <div style={{ padding: 12, fontFamily: "system-ui, sans-serif", color: "#e8e8e8", background: "#111", maxWidth: 440 }}>
+        <h3 style={{ marginTop: 0, fontSize: "1rem", color: "#9ad", letterSpacing: "0.05em" }}>
+          Mara&apos;s Atelier
+        </h3>
+
+        {/* Interactive throw canvas */}
+        <div style={{ position: "relative", marginBottom: 8 }}>
+          <svg
+            width={400} height={240} viewBox={`0 0 ${ROOM.w} ${ROOM.h}`}
+            style={{ background: "#1c1c24", border: "1px solid #444", borderRadius: 4, cursor: "crosshair", display: "block" }}
+            onClick={this.handleSvgClick}
+          >
+            {/* Obstacles with labels */}
+            {OBSTACLES.map((o) => (
+              <g key={o.name}>
+                <rect x={o.aabb.x} y={o.aabb.y} width={o.aabb.w} height={o.aabb.h} fill="#3a3a4a" stroke="#555" strokeWidth={0.5} />
+                <text x={o.aabb.x + o.aabb.w / 2} y={o.aabb.y + o.aabb.h / 2 + 2} textAnchor="middle" fill="#777" fontSize={5}>{o.name}</text>
+              </g>
+            ))}
+            {/* Trajectory */}
+            {last?.steps.map((s, i) => (
+              <circle key={i} cx={s.x + 3} cy={s.y + 3} r={s.bounced ? 2 : 1} fill={s.bounced ? "#fb8" : "#6bf"} opacity={0.7} />
+            ))}
+            {/* Landing spot */}
+            {endpoint && (
+              <circle cx={endpoint.x + 3} cy={endpoint.y + 3} r={3} fill="none" stroke="#fb8" strokeWidth={1} />
+            )}
+            {/* Throw origin */}
+            <circle cx={ROOM.w / 2} cy={ROOM.h / 2} r={3} fill="#5af" opacity={0.6} />
+          </svg>
+          <div style={{ position: "absolute", bottom: 6, right: 8, color: "#555", fontSize: "0.7rem", pointerEvents: "none" }}>
+            click to throw
+          </div>
         </div>
+
+        {/* Result summary */}
+        {last ? (
+          <div style={{ fontSize: "0.85rem", color: "#aaa" }}>
+            {hitList.length > 0
+              ? <span>Struck <b style={{ color: "#fb8" }}>{hitList.join(", ")}</b>{endpoint ? ` · came to rest at (${Math.round(endpoint.x)}, ${Math.round(endpoint.y)})` : ""}</span>
+              : <span style={{ color: "#888" }}>Missed everything{endpoint ? ` · stopped at (${Math.round(endpoint.x)}, ${Math.round(endpoint.y)})` : ""}</span>
+            }
+          </div>
+        ) : (
+          <div style={{ fontSize: "0.85rem", color: "#555", fontStyle: "italic" }}>Click anywhere in the atelier to throw</div>
+        )}
       </div>
     );
   }
