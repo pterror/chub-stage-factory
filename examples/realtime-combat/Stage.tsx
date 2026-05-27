@@ -21,7 +21,7 @@ import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { AttackDef, RealtimeWorld, type RealtimeEvent } from "../../src/lib/combat-realtime";
 import { Rng } from "../../src/lib/rng";
-import { realtimeCombatPattern } from "../../src/lib/patterns/realtime-combat";
+import { realtimeCombatPattern } from "../../src/lib/patterns/combat/realtime-combat";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations } from "../../src/lib/observation";

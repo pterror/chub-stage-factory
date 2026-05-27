@@ -19,7 +19,7 @@ import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { EffectDef } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
 import { withPersistence } from "../../src/lib/persistence";
-import { effectsPattern, type EffectsBundle } from "../../src/lib/patterns/effects";
+import { effectsPattern, type EffectsBundle } from "../../src/lib/patterns/combat/effects";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }
 type ChatStateType = null;

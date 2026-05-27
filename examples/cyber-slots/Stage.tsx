@@ -24,7 +24,7 @@ import { Registry } from "../../src/lib/registry";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations } from "../../src/lib/observation";
-import { cyberSlotsPattern } from "../../src/lib/patterns/cyber-slots";
+import { cyberSlotsPattern } from "../../src/lib/patterns/character/cyber-slots";
 import {
   PersistenceStore, createChubLayers, chubTreeHistory, snapshotHistory, forbidBranching,
   mergeResponses, shard, shardOf, withPersistence,

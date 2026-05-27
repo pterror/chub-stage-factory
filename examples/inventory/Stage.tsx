@@ -19,7 +19,7 @@ import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { Stack } from "../../src/lib/inventory";
 import { mergeResponses, withPersistence } from "../../src/lib/persistence";
-import { inventoryPattern, type InventoryBundle } from "../../src/lib/patterns/inventory";
+import { inventoryPattern, type InventoryBundle } from "../../src/lib/patterns/character/inventory";
 
 interface MessageStateType { ticks: number; [k: string]: unknown }
 type ChatStateType = null;

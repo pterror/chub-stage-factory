@@ -435,76 +435,76 @@ table and full example.
   - `toJSON()`, `static fromJSON(data): World`
 - `worldResolvers(world): Resolvers` — predicate resolver shim for world-flag / located-at kinds
 
-## `patterns/scene.ts` (Wave 2A)
+## `patterns/world/scene.ts` (Wave 2A)
 
 - `scenePattern(opts)` — composer wiring `scene.ts` primitive + `body.ts` + `actor.ts` + `tag-parser.ts`; the erotic-RPG scene resolver
 
-## `patterns/inventory.ts`
+## `patterns/character/inventory.ts`
 
 - `inventoryPattern(opts)` — composes `Inventory` + `observation` + `chub-adapters` + prose-register snippet; standard item-management bundle
 
-## `patterns/effects.ts`
+## `patterns/combat/effects.ts`
 
 - `effectsPattern(opts)` — composes `EffectStore` + `Stats` + `Scheduler` + `Timeline`; status-effect lifecycle with stat application and expiry
 
-## `patterns/turn-combat.ts`
+## `patterns/combat/turn-combat.ts`
 
 - `turnCombatPattern(opts)` — composes `Action` + `combat-turn` + `EffectStore` + `Stats` + `Rng` + `Timeline`; full turn-based combat loop
 
-## `patterns/realtime-combat.ts`
+## `patterns/combat/realtime-combat.ts`
 
 - `realtimeCombatPattern(opts)` — composes `RealtimeWorld` + `physics` + `Scheduler` + `Rng` + `Timeline`; tick-driven projectile/collision combat
 
-## `patterns/body-transformation.ts`
+## `patterns/character/body-transformation.ts`
 
 - `bodyTransformationPattern(opts)` — composes `Body` + `transformation` + `tags` + `snapshots` + `Timeline` + `observation`; gradual / staged body-change with trajectory support
 
-## `patterns/cyber-slots.ts`
+## `patterns/character/cyber-slots.ts`
 
 - `cyberSlotsPattern(opts)` — composes `Equipment` + `Body` + `transformation` + `constraints` + `tags` + `observation`; cybernetic implant / augmentation slot system
 
-## `patterns/physics.ts`
+## `patterns/combat/physics.ts`
 
 - `physicsPattern(opts)` — composes `physics` + `Rng` + `observation`; spatial-hash + collision wrapper for 2D stages
 
-## `patterns/dialogue.ts`
+## `patterns/character/dialogue.ts`
 
 - `dialoguePattern(opts)` — composes `Fsm` with say/choices semantics; predicate-gated transitions for branching NPC dialogue trees
 
-## `patterns/score.ts`
+## `patterns/combat/score.ts`
 
 - `scorePattern(opts)` — composes `Stats` + `Timeline`; tier-based unlock conditions and score tracking
 
-## `patterns/faction.ts`
+## `patterns/combat/faction.ts`
 
 - `factionPattern(opts)` — composes `Stats` (reputation = Stat with tier) + predicate content gates; no new primitive needed
 
-## `patterns/skit.ts`
+## `patterns/lifecycle/skit.ts`
 
 - `skitPattern(opts)` — PARC's Skit shape as composition: scene + observation + outcome-resolution + actor
 
-## `patterns/sandbox.ts`
+## `patterns/world/sandbox.ts`
 
 - `sandboxPattern(opts)` — composes `world` + `actor` + `intent` + `procgen` for free-roam Zelda/Skyrim-style stages
 
-## `patterns/world-exploration.ts` (Wave 2B)
+## `patterns/world/world-exploration.ts` (Wave 2B)
 
 - `worldExplorationPattern(opts)` — composes `world` + `actor` + `intent` + `observation`; parser-IF movement + scope-aware observation
 
-## `patterns/bulk-tick.ts` (Wave 2C) — [BULK-TICK.md](./patterns/BULK-TICK.md)
+## `patterns/combat/bulk-tick.ts` (Wave 2C) — [BULK-TICK.md](./patterns/combat/BULK-TICK.md)
 
 - `type TickEventProcessor<E> = (actor, now) => E[]`
 - `interface BulkTickBundleInit<E> { pool, processActor, timeline? }`
 - `interface BulkTickBundle<E> { pool, timeline, tick(now?): E[], report(events, render): string, tickAndReport(render, now?): { events, report } }`
 - `bulkTickPattern<E>(init): BulkTickBundle<E>` — forEach + collect + push + render loop; domain logic in `processActor`
 
-## `patterns/managerial.ts` (Wave 2C) — [MANAGERIAL.md](./patterns/MANAGERIAL.md)
+## `patterns/lifecycle/managerial.ts` (Wave 2C) — [MANAGERIAL.md](./patterns/lifecycle/MANAGERIAL.md)
 
 - `interface ManagerialInit<P, E> { timeline, generator, reportPrompt, applyPolicy, advance, renderEvent?, reportMaxTokens? }`
 - `interface ManagerialBundle<P, E> { applyPolicy(fields), tick(pool, now): E[], renderReport(events, now): Promise<string>, lastTickEvents, timeline }`
 - `managerialPattern<P, E>(init): ManagerialBundle<P, E>` — policy-issue + bulk-tick + LLM report-render loop
 
-## `patterns/form.ts` (Wave 2D) — [FORM.md](./patterns/FORM.md)
+## `patterns/character/form.ts` (Wave 2D) — [FORM.md](./patterns/character/FORM.md)
 
 - `interface FormAesthetics { displayName, description?, colorPrimary?, colorSecondary?, iconTag? }`
 - `interface FormLore { origin?, faction?, archetype?, proseRegister? }`
@@ -512,37 +512,37 @@ table and full example.
 - `interface Form { id, actor: Actor, abilities: Registry<ActionDef>, aesthetics, lore }`
 - `formPattern(init): Form` — assembles Body + Stats + ActionDef set + aesthetics into a pilotable Form
 
-## `patterns/form-collection.ts` (Wave 2D) — [FORM-COLLECTION.md](./patterns/FORM-COLLECTION.md)
+## `patterns/character/form-collection.ts` (Wave 2D) — [FORM-COLLECTION.md](./patterns/character/FORM-COLLECTION.md)
 
 - `formCollectionPattern(opts)` — `PlaceholderRegistry<Form>` wrapper; collection grows via gameplay; `unlock(id, form)` resolves placeholders
 
-## `patterns/grafting.ts` (Wave 2D) — [GRAFTING.md](./patterns/GRAFTING.md)
+## `patterns/character/grafting.ts` (Wave 2D) — [GRAFTING.md](./patterns/character/GRAFTING.md)
 
 - `interface GraftingOptions { forms, learnedLibrary, subsumableCost?, consumeOnSubsume?, helminthVersion?, abilityScaling?, slot4Lock?, invigorations?, provenanceTracking?, maxConfigSlots? }`
 - `interface GraftingBundle { hooks: { subsume(formId, abilityId): InjectionRecord, inject(req): FormConfig, replace(req): FormConfig, listLearned(): AbilityDef[], listInjected(formId): FormConfig[] } }`
 - `graftingPattern(opts): GraftingBundle` — Helminth-style ability transfer with provenance, slot-4 lock, and helminthVersion transform
 
-## `patterns/puppet.ts` (Wave 2D) — [PUPPET.md](./patterns/PUPPET.md)
+## `patterns/character/puppet.ts` (Wave 2D) — [PUPPET.md](./patterns/character/PUPPET.md)
 
 - `puppetPattern(opts)` — actor-piloting-actor; player's true-self pilots a form Actor; identity/memory on pilot, body/abilities on form
 
-## `patterns/lineage.ts` — [LINEAGE.md](./patterns/LINEAGE.md)
+## `patterns/character/lineage.ts` — [LINEAGE.md](./patterns/character/LINEAGE.md)
 
 - `lineagePattern(opts)` — procgen.buildGraph (tree) + Actor affinity-with-parent; `listDescendants`, `findAncestor`, `computeInbreedingCoefficient`
 
-## `patterns/daily-vignette.ts` — [DAILY-VIGNETTE.md](./patterns/DAILY-VIGNETTE.md)
+## `patterns/character/daily-vignette.ts` — [DAILY-VIGNETTE.md](./patterns/character/DAILY-VIGNETTE.md)
 
 - `dailyVignettePattern(opts)` — `generate` + `observation` + `Timeline` + scheduler; one well-grounded vignette per game-day tick with continuity from past events
 
-## `patterns/slot-assignment.ts` — [SLOT-ASSIGNMENT.md](./patterns/SLOT-ASSIGNMENT.md)
+## `patterns/world/slot-assignment.ts` — [SLOT-ASSIGNMENT.md](./patterns/world/SLOT-ASSIGNMENT.md)
 
 - `slotAssignmentPattern(opts)` — ActorPool + slot constraint predicates + ConditionalTrigger; "worker X assigned to room slot Y" relation
 
-## `patterns/spatial-propagation.ts` — [SPATIAL-PROPAGATION.md](./patterns/SPATIAL-PROPAGATION.md)
+## `patterns/world/spatial-propagation.ts` — [SPATIAL-PROPAGATION.md](./patterns/world/SPATIAL-PROPAGATION.md)
 
 - `spatialPropagationPattern(opts)` — World graph + ConditionalTrigger + Scheduler; room-to-room event spread (fire, infection, gossip, faction territory)
 
-## `patterns/subject-sandbox.ts` — [SUBJECT-SANDBOX.md](./patterns/SUBJECT-SANDBOX.md)
+## `patterns/world/subject-sandbox.ts` — [SUBJECT-SANDBOX.md](./patterns/world/SUBJECT-SANDBOX.md)
 
 - `subjectSandboxPattern(opts)` — world + actor + scheduler + scene + predicate-triggers + dailyVignettePattern + Timeline; first-person life-sim where player IS the subject
 

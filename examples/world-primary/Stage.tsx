@@ -36,8 +36,8 @@ import { ContextAssembler, systemInstructionsContributor } from "../../src/lib/c
 import { LlmPipelineRunner } from "../../src/lib/llm-pipeline";
 import { TriggerSet, type ConditionalTrigger } from "../../src/lib/trigger";
 import { Rng } from "../../src/lib/rng";
-import { renderTrigger, type RenderStub } from "../../src/lib/patterns/render-trigger";
-import { freeformPipeline, type OracleDelta } from "../../src/lib/patterns/freeform-pipeline";
+import { renderTrigger, type RenderStub } from "../../src/lib/patterns/lifecycle/render-trigger";
+import { freeformPipeline, type OracleDelta } from "../../src/lib/patterns/lifecycle/freeform-pipeline";
 import { type SchemaParser } from "../../src/lib/generate";
 import { World, worldResolvers } from "../../src/lib/world";
 

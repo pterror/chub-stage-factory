@@ -21,7 +21,7 @@ import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { Registry } from "../../src/lib/registry";
 import { TransformationDef } from "../../src/lib/transformation";
 import { withPersistence } from "../../src/lib/persistence";
-import { bodyTransformationPattern, type BodyTransformationBundle } from "../../src/lib/patterns/body-transformation";
+import { bodyTransformationPattern, type BodyTransformationBundle } from "../../src/lib/patterns/character/body-transformation";
 
 interface MessageStateType { ticks: number; lastApplied?: string; [k: string]: unknown }
 interface ChatStateType { [k: string]: unknown }

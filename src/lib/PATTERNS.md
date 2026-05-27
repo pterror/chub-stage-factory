@@ -80,7 +80,7 @@ hydration order, fall back to the manual recipe above.
 
 ```ts
 import { withPersistence, mergeResponses } from "./lib/persistence";
-import { inventoryPattern, type InventoryBundle } from "./lib/patterns/inventory";
+import { inventoryPattern, type InventoryBundle } from "./lib/patterns/character/inventory";
 
 // Replace `extends StageBase<I, C, M, Ch>` with:
 export class MyStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
@@ -861,10 +861,10 @@ When to use: Subject-life-sim-shape (#19), Pregnancy-sim-shape (#17), dating-sim
 
 ## 17. Scene composition (Wave 2A)
 
-Wire `scenePattern` from `patterns/scene.ts` for combinatoric body-tag-aware erotic-RPG scenes. Full design and slot/verb/act authoring guide: `src/lib/design/SCENE.md`.
+Wire `scenePattern` from `patterns/world/scene.ts` for combinatoric body-tag-aware erotic-RPG scenes. Full design and slot/verb/act authoring guide: `src/lib/design/SCENE.md`.
 
 ```ts
-import { scenePattern } from "./lib/patterns/scene";
+import { scenePattern } from "./lib/patterns/world/scene";
 // See design/SCENE.md for SceneActionDef authoring and SceneConsequenceRegistry usage.
 ```
 
@@ -919,7 +919,7 @@ particles. Not a physics engine; enough for stage-level checks. The
 returns a `simulate` helper for bounded projectile traces.
 
 ```ts
-import { physicsPattern } from "./lib/patterns/physics";
+import { physicsPattern } from "./lib/patterns/combat/physics";
 
 const p = physicsPattern({
   obstacles: [
@@ -938,7 +938,7 @@ const hits = p.hash.query(movedAABB);
 When to use: any stage with positional collision — realtime combat (pair with
 recipe 6), dungeon tile movement, projectile tracing, soft-body particle
 chains. Also available as the `physicsPattern` extract composer:
-`src/lib/patterns/physics.ts`.
+`src/lib/patterns/combat/physics.ts`.
 
 ---
 
@@ -949,7 +949,7 @@ a `say` string and a `choices` list; each choice has an optional
 `Predicate<S>` guard filtered at display time.
 
 ```ts
-import { dialoguePattern } from "./lib/patterns/dialogue";
+import { dialoguePattern } from "./lib/patterns/character/dialogue";
 
 const d = dialoguePattern({
   states: [
@@ -981,7 +981,7 @@ Named `Stat` bundled with a `Timeline` of score events and a list of
 `ScoreUnlock` entries. Unlocks fire when the tier threshold is newly crossed.
 
 ```ts
-import { scorePattern } from "./lib/patterns/score";
+import { scorePattern } from "./lib/patterns/combat/score";
 
 const s = scorePattern({
   name: "karma",
@@ -1006,7 +1006,7 @@ One `Stat` per faction plus a `gate(factionId, tier, state, refs)` predicate
 constructor. Content is gated by calling `gate` and evaluating the result.
 
 ```ts
-import { factionPattern } from "./lib/patterns/faction";
+import { factionPattern } from "./lib/patterns/combat/faction";
 
 const f = factionPattern({
   factions: [
@@ -1035,7 +1035,7 @@ Composes `scenePattern` + `Actor` + `assembleObservations` into the PARC Skit
 ergonomic. One call produces a scene with its observation feed attached.
 
 ```ts
-import { skitPattern } from "./lib/patterns/skit";
+import { skitPattern } from "./lib/patterns/lifecycle/skit";
 
 const skit = skitPattern({
   actors: [playerActor, npcActor],
@@ -1061,7 +1061,7 @@ Assembles a complete character-in-its-own-right from Body + Stats + abilities
 its own appearance, capabilities, and narrative identity.
 
 ```ts
-import { formPattern } from "./lib/patterns/form";
+import { formPattern } from "./lib/patterns/character/form";
 
 const frame = formPattern({
   id: "excalibur",
@@ -1086,7 +1086,7 @@ pre-seeded placeholder stubs. Placeholders are visible immediately; real Forms
 swap in on unlock or procgen completion.
 
 ```ts
-import { formCollectionPattern } from "./lib/patterns/form-collection";
+import { formCollectionPattern } from "./lib/patterns/character/form-collection";
 
 const collection = formCollectionPattern({
   placeholders: ["volt", "mag", "ash"],   // stubs seeded immediately
@@ -1113,7 +1113,7 @@ Ability subsume → inject pipeline with slot-lock enforcement and full
 `PlaceholderRegistry`; persistence is the stage's responsibility via Shard.
 
 ```ts
-import { graftingPattern } from "./lib/patterns/grafting";
+import { graftingPattern } from "./lib/patterns/character/grafting";
 
 const helminth = graftingPattern({
   forms: collection.registry,          // PlaceholderRegistry<Form>
@@ -1143,7 +1143,7 @@ abilities. `equip` / `unequip` switch the active form; `active` always
 resolves to the correct surface to show the LLM.
 
 ```ts
-import { puppetPattern } from "./lib/patterns/puppet";
+import { puppetPattern } from "./lib/patterns/character/puppet";
 
 const puppet = puppetPattern({
   pilot: trueSelfActor,
@@ -1168,7 +1168,7 @@ report from `Timeline` events via `Timeline.summarize`. Enables the
 "arcology manager" ergonomic of FC-shape.
 
 ```ts
-import { managerialPattern } from "./lib/patterns/managerial";
+import { managerialPattern } from "./lib/patterns/lifecycle/managerial";
 
 const mgr = managerialPattern({
   policyFields: POLICY_SCHEMA,    // typed fields the player can set
@@ -1197,7 +1197,7 @@ Full open-world composer: world + actor + intent parsing + procgen. One call
 per player turn handles scope, intent, look, and move.
 
 ```ts
-import { sandboxPattern } from "./lib/patterns/sandbox";
+import { sandboxPattern } from "./lib/patterns/world/sandbox";
 
 const sb = sandboxPattern({
   world, pool, procgen, intentParser,
@@ -1224,7 +1224,7 @@ intent, look, move — same surface as sandbox but with an explicit grammar
 layer and `look` returning formatted room + entity list + visible exits.
 
 ```ts
-import { worldExplorationPattern } from "./lib/patterns/world-exploration";
+import { worldExplorationPattern } from "./lib/patterns/world/world-exploration";
 
 const we = worldExplorationPattern({ world, pool, grammar: GRAMMAR_DEFS });
 

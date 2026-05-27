@@ -24,7 +24,7 @@ import { Combatant, World, AttackProfile } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
 import { withPersistence } from "../../src/lib/persistence";
-import { turnCombatPattern, type TurnCombatBundle } from "../../src/lib/patterns/turn-combat";
+import { turnCombatPattern, type TurnCombatBundle } from "../../src/lib/patterns/combat/turn-combat";
 
 interface MessageStateType { round: number; choice?: string; [k: string]: unknown }
 interface ChatStateType { [k: string]: unknown }

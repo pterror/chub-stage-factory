@@ -19,7 +19,7 @@ import { ReactElement } from "react";
 import { StageResponse, InitialData, Message } from "@chub-ai/stages-ts";
 import { type AABB } from "../../src/lib/physics";
 import { Rng } from "../../src/lib/rng";
-import { physicsPattern, type PhysicsSimResult, type TrajectoryStep } from "../../src/lib/patterns/physics";
+import { physicsPattern, type PhysicsSimResult, type TrajectoryStep } from "../../src/lib/patterns/combat/physics";
 import { parseTags } from "../../src/lib/tag-parser";
 import { emitStageDirections } from "../../src/lib/chub-adapters";
 import { assembleObservations } from "../../src/lib/observation";
