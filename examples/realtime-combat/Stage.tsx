@@ -29,6 +29,12 @@ import {
   PersistenceStore, createChubLayers, chubTreeHistory, noHistory,
   mergeResponses, shardOf, shard, withPersistence,
 } from "../../src/lib/persistence";
+import type {
+  StageIntrospect,
+  VerbDescriptor,
+  StageDescriptor,
+  InvocationResult,
+} from "../../src/lib/introspect";
 
 interface MessageStateType { ticks: number; hp: number; [k: string]: unknown }
 type ChatStateType = null;
@@ -43,7 +49,7 @@ const BULLET: AttackDef = {
 const ARENA = { w: 240, h: 160 };
 const ARENA_BOUNDS = { minX: 0, maxX: ARENA.w, minY: 0, maxY: ARENA.h };
 
-export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() {
+export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStateType, MessageStateType, ConfigType>() implements StageIntrospect {
   combat = realtimeCombatPattern({ seed: 48, bounds: ARENA_BOUNDS, rngSeed: "arena" });
   tick = { n: 0, hp: 30 };
   layers = createChubLayers();
@@ -135,14 +141,8 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
     return mergeResponses({ modifiedMessage: stripped }, await this.bound.afterResponse(botMessage));
   }
 
-  /** Click-to-shoot: player clicks a point in the arena SVG; we fire from
-   *  the player combatant toward that point. Routes through the existing
-   *  shoot() helper so the physics path is identical to LLM <shoot> tags.
-   *
-   *  Primitive gap: this bypasses beforePrompt/afterResponse — the shot fires
-   *  but the LLM is not prompted to narrate it. A StageIntrospect
-   *  invokeVerb("shoot", {dx,dy}) path would close this gap.
-   */
+  /** Click-to-shoot: routes through invokeVerb so the LLM narrates the shot
+   *  and state is persisted via the normal lifecycle. */
   private handleArenaClick = (e: React.MouseEvent<SVGSVGElement>) => {
     const svg = e.currentTarget;
     const rect = svg.getBoundingClientRect();
@@ -150,10 +150,86 @@ export class RealtimeCombatStage extends withPersistence<ChatStateType, InitStat
     const clickY = ((e.clientY - rect.top) / rect.height) * ARENA.h;
     const you = this.combat.world.combatants.get("you");
     if (!you) return;
-    const dx = clickX - you.pos.x;
-    const dy = clickY - you.pos.y;
-    this.shoot(dx, dy, this.tick.n);
+    void this.invokeVerb("shoot", { x: clickX, y: clickY });
   };
+
+  /* ---------------- StageIntrospect ----------------
+   * invokeVerb computes (dx, dy) from the target point, synthesises a Message
+   * and calls beforePrompt — same lifecycle path as an LLM turn, so every
+   * click-shot triggers narration and state persistence.
+   * ------------------------------------------------- */
+
+  availableVerbs(): VerbDescriptor[] {
+    const you = this.combat.world.combatants.get("you");
+    const alive = you != null && you.hp > 0;
+    return [
+      {
+        name: "shoot",
+        label: "Shoot",
+        description: "Fire a bullet toward the target point (x, y) in arena coordinates.",
+        args: [
+          { name: "x", type: "number", required: true, description: "Target X in arena coordinates (0–240)." },
+          { name: "y", type: "number", required: true, description: "Target Y in arena coordinates (0–160)." },
+        ],
+        enabled: alive,
+        group: "action",
+      },
+    ];
+  }
+
+  describe(): StageDescriptor {
+    const you = this.combat.world.combatants.get("you");
+    const drones = [...this.combat.world.combatants.values()].filter((c) => c.team === "e" && c.hp > 0);
+    return {
+      summary:
+        `Arena ${ARENA.w}×${ARENA.h}. Tick ${this.tick.n}. ` +
+        `HP ${this.tick.hp}/30. ` +
+        `${drones.length} drone${drones.length !== 1 ? "s" : ""} active.` +
+        (you ? ` Player at (${Math.round(you.pos.x)}, ${Math.round(you.pos.y)}).` : " Player downed."),
+      details: {
+        tick: this.tick.n,
+        hp: this.tick.hp,
+        playerPos: you ? { x: you.pos.x, y: you.pos.y } : null,
+        droneCount: drones.length,
+      },
+      verbCount: 1,
+    };
+  }
+
+  async invokeVerb(name: string, args?: Record<string, unknown>): Promise<InvocationResult> {
+    if (name !== "shoot") {
+      return { ok: false, error: `unknown verb "${name}"` };
+    }
+    const x = typeof args?.x === "number" ? args.x : null;
+    const y = typeof args?.y === "number" ? args.y : null;
+    if (x === null || y === null) {
+      return { ok: false, error: 'verb "shoot" requires numeric args x and y' };
+    }
+    const you = this.combat.world.combatants.get("you");
+    if (!you) return { ok: false, error: "player combatant not found" };
+    const dx = x - you.pos.x;
+    const dy = y - you.pos.y;
+    const msg: Message = {
+      anonymizedId: "0",
+      content: `shoot ${dx.toFixed(2)},${dy.toFixed(2)}`,
+      isBot: false,
+      promptForId: "1",
+      identity: "12345",
+      isMain: true,
+    };
+    try {
+      const resp = await this.beforePrompt(msg);
+      return {
+        ok: resp?.error == null,
+        message: msg.content,
+        error: resp?.error ?? undefined,
+        messageState: resp?.messageState,
+      };
+    } catch (err) {
+      const e = err as Error;
+      return { ok: false, error: `beforePrompt threw: ${e.message}` };
+    }
+  }
 
   private renderEventLine(e: RealtimeEvent): string | null {
     switch (e.kind) {
