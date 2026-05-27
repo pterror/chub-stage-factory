@@ -71,6 +71,7 @@ export class EffectsStage extends withPersistence<ChatStateType, InitStateType, 
           "visual observation.",
       },
     });
+    this.layers = this.p.layers;
     this.initStore(() => this.p.store);
   }
 

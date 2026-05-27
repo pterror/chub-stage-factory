@@ -62,6 +62,7 @@ export class InventoryStage extends withPersistence<ChatStateType, InitStateType
     this.p.inv.add("back-room", "stove");
     this.p.inv.add("pak-pocket", "ration-bar", 1);
 
+    this.layers = this.p.layers;
     this.initStore(() => this.p.store);
   }
 

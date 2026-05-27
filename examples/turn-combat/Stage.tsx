@@ -23,7 +23,6 @@ import { ActionDef } from "../../src/lib/action";
 import { Combatant, World, AttackProfile } from "../../src/lib/combat-turn";
 import { EffectStore, EffectDef } from "../../src/lib/effects";
 import { Registry } from "../../src/lib/registry";
-import { summarize } from "../../src/lib/timeline";
 import { withPersistence } from "../../src/lib/persistence";
 import { turnCombatPattern, type TurnCombatBundle } from "../../src/lib/patterns/turn-combat";
 
@@ -113,6 +112,7 @@ export class TurnCombatStage extends withPersistence<ChatStateType, InitStateTyp
           "do not invent damage numbers.",
       },
     });
+    this.layers = this.p.layers;
     this.initStore(() => this.p.store);
   }
 
@@ -127,28 +127,98 @@ export class TurnCombatStage extends withPersistence<ChatStateType, InitStateTyp
   render(): ReactElement {
     const { combatants, turn, events } = this.p;
     const now = turn.n;
+
+    const pc = combatants.find((c) => c.id === "pc");
+    const duellist = combatants.find((c) => c.id === "duellist");
+
+    function hpBar(hp: number, max: number): ReactElement {
+      const pct = Math.max(0, Math.min(1, hp / max));
+      const color = pct > 0.6 ? "#5a5" : pct > 0.3 ? "#aa5" : "#a55";
+      return (
+        <span style={{ display: "inline-block", width: 80, height: 8, background: "#333", borderRadius: 4, verticalAlign: "middle", marginLeft: 6 }}>
+          <span style={{ display: "block", width: `${Math.round(pct * 100)}%`, height: "100%", background: color, borderRadius: 4 }} />
+        </span>
+      );
+    }
+
+    // Map effect ids to short status labels.
+    const EFFECT_LABELS: Record<string, string> = {
+      guarded: "Guarding (+armor)",
+      sundered: "Sundered (−armor)",
+    };
+
+    function combatantStatus(c: Combatant, maxHp: number): ReactElement {
+      const effectMods = c.effects?.totalMagnitudes(now).stats?.armor ?? 0;
+      const armor = (c.stats?.armor ?? 0) + effectMods;
+      const activeEffects = c.effects?.active().map((i) => EFFECT_LABELS[i.id] ?? i.id) ?? [];
+      return (
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: "bold", fontSize: "0.9rem" }}>
+            {c.id === "pc" ? "You" : "The duellist"}
+            {hpBar(c.hp, maxHp)}
+            <span style={{ color: "#aaa", fontSize: "0.8rem", marginLeft: 8 }}>{c.hp} hp · armor {armor}</span>
+          </div>
+          {activeEffects.length > 0 && (
+            <div style={{ color: "#9ad", fontSize: "0.8rem", marginLeft: 4 }}>{activeEffects.join(", ")}</div>
+          )}
+        </div>
+      );
+    }
+
+    // Narrate combat events as plain prose.
+    type CombatEvent = { kind: string; actor?: string; target?: string; final?: number; crit?: boolean; effectId?: string; combatant?: string };
+    function narrateEvent(e: CombatEvent): string | null {
+      const who = (id?: string) => id === "pc" ? "You" : id === "duellist" ? "The duellist" : (id ?? "?");
+      switch (e.kind) {
+        case "hit": return `${who(e.actor)} strikes${e.crit ? " critically" : ""}${e.final != null ? ` for ${e.final} damage` : ""}. ${who(e.target)} reels.`;
+        case "missed": return `${who(e.actor)}'s strike goes wide.`;
+        case "dodged": return `${who(e.target)} sidesteps ${who(e.actor)}'s blow.`;
+        case "effect_applied": return `${who(e.target)} is ${EFFECT_LABELS[e.effectId ?? ""] ?? e.effectId}.`;
+        case "downed": return `${who(e.combatant)} is downed!`;
+        default: return null;
+      }
+    }
+
+    const narrations = events
+      .window(30)
+      .map((ev) => narrateEvent(ev.payload as CombatEvent))
+      .filter((s): s is string => s !== null);
+
+    // Queue hint: tell the player what their queued move will do.
+    const QUEUE_HINTS: Record<string, string> = {
+      swing: "You'll attack — standard slash.",
+      guard: "You'll raise your guard (+3 armor this round).",
+      sunder: "You'll sunder — reduced damage but weakens their armor for 2 rounds.",
+    };
+    const nextHint = turn.choice ? QUEUE_HINTS[turn.choice] ?? `Queued: ${turn.choice}` : "Waiting for your move — describe your action.";
+
     return (
-      <div style={{ padding: 12, fontFamily: "ui-monospace, monospace", color: "#ddd", background: "#111" }}>
-        <h3 style={{ marginTop: 0 }}>Duel — round {now} (you queued: {turn.choice})</h3>
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
-          <thead><tr><th align="left">combatant</th><th>HP</th><th>AP</th><th>armor</th><th align="left">effects</th></tr></thead>
-          <tbody>
-            {combatants.map((c) => (
-              <tr key={c.id} style={{ borderTop: "1px solid #333" }}>
-                <td style={{ padding: "4px 8px" }}>{c.id}</td>
-                <td align="center">{c.hp}</td>
-                <td align="center">{c.resources?.ap ?? 0}</td>
-                <td align="center">{(c.stats?.armor ?? 0) + (c.effects?.totalMagnitudes(now).stats?.armor ?? 0)}</td>
-                <td>{c.effects?.active().map((i) => i.id).join(", ") || "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <h4>Last round events</h4>
-        <pre style={{ background: "#000", padding: 8, maxHeight: 220, overflow: "auto" }}>
-{summarize(events.window(30), (e, at) => `${at}: ${JSON.stringify(e)}`) || "—"}
-        </pre>
-        {this.p.combatantsHolder.ended && <h3 style={{ color: "#e88" }}>Combat ended: {this.p.combatantsHolder.ended}</h3>}
+      <div style={{ padding: 12, fontFamily: "sans-serif", color: "#ddd", background: "#1a1a1a", maxWidth: 480 }}>
+        <h3 style={{ marginTop: 0, fontSize: "1rem", color: "#e8c97a" }}>Duel — Round {now}</h3>
+
+        {pc && combatantStatus(pc, 30)}
+        {duellist && combatantStatus(duellist, 22)}
+
+        <div style={{ marginTop: 8, padding: "6px 10px", background: "#252525", borderRadius: 4, fontSize: "0.85rem", color: "#ccc", borderLeft: "3px solid #7a9" }}>
+          {nextHint}
+        </div>
+
+        {narrations.length > 0 && (
+          <>
+            <h4 style={{ fontSize: "0.85rem", color: "#888", marginBottom: 4, marginTop: 12 }}>Last round</h4>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {narrations.map((s, i) => (
+                <li key={i} style={{ fontSize: "0.85rem", marginBottom: 3, color: "#ccc" }}>{s}</li>
+              ))}
+            </ul>
+          </>
+        )}
+
+        {this.p.combatantsHolder.ended && (
+          <div style={{ marginTop: 12, padding: "8px 12px", background: "#3a1a1a", borderRadius: 4, color: "#e88", fontWeight: "bold" }}>
+            {this.p.combatantsHolder.ended === "pc-down" ? "You have fallen." : this.p.combatantsHolder.ended === "enemy-down" ? "The duellist is defeated." : `Combat ended.`}
+          </div>
+        )}
       </div>
     );
   }
