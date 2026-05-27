@@ -242,3 +242,25 @@ Wave 2B `world.ts` (graph of rooms + scope queries) was landed in 2026-05-27.
 - `synonyms.nouns` built from `world.rooms()` instead of `Object.values(LOCATIONS)`.
 
 `bun run build`, `bun run lint`, `bun run test`, `bun run test:smoke` all pass.
+
+---
+
+<!-- UX audit — 2026-05-27 -->
+
+## 14. UX audit (2026-05-27)
+
+Three-lens audit (stage-author / composer-author / end-user) applied with the
+interaction-graph, affordance-opacity, affordance-surfaces, and affordance-types
+frameworks. Full report: `docs/UX-AUDIT-2026-05-27.md`.
+
+Top three RED findings: (1) `examples/world-primary/Stage.tsx` ActionSurface
+verbs and FreeformInput submit are wired to no-ops (orphaned affordances);
+(2) example renders are debugger-shaped (JSON dumps, raw tags) leaking dev
+surface into the player's path — most acute in `cyber-slots/Stage.tsx:152`;
+(3) `scripts/build-example.mjs:32-67` data-loss hazard if killed during build.
+
+Mock-stage navigation tooling: recommended (R1) as `StageIntrospect` interface
++ `scripts/explore-stage.mjs` driver — same architectural move that fixes the
+world-primary orphan verbs.
+
+12 recommendations ordered by leverage in §"Recommendations" of the audit.
