@@ -29,7 +29,7 @@ and leave no instance behind. Use for irreversible changes.
 - `body.getAllEffectiveTags()` — map of all slots
 - `body.applyTransformation(tf)` — push instance; replaces if same id already present
 - `body.removeTransformation(id)` / `hasTransformation(id)` / `getTransformation(id)`
-- `body.getTransformations()` / `getTransformationsForSlot(s)`
+- `body.getTransformations()` / `getTransformationsForSlot(s)` — each instance includes `displayName` and `description` copied from the def at apply time (no registry lookup needed at the call site)
 - `body.applyPermanent(patch)` — dissolves into base; returns `ApplyResult`
 - `body.tick(now)` — removes expired transformations; returns the expired list
 - `body.toJSON()` / `Body.fromJSON(data)` — `source` back-references are dropped on serialize

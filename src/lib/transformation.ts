@@ -155,6 +155,8 @@ export function apply(
     startTime: now,
     duration: dur,
     source: def,
+    displayName: def.displayName,
+    description: def.description,
   };
   body.applyTransformation(inst);
   return inst;

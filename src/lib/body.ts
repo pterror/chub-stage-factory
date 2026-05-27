@@ -12,7 +12,8 @@
  *
  * SHAPE:
  *   interface TransformationInstance { id, slot, addTags, removeTags, startTime,
- *     duration?: number | null, source?: any (def back-ref) }
+ *     duration?: number | null, source?: any (def back-ref),
+ *     displayName?: string, description?: string }
  *   class Body
  *     constructor(initialSlots?: Record<string, Iterable<string>> | Map<...>)
  *     hasSlot(s), getSlots(), getBaseTags(s), setBaseTags(s, tags)
@@ -41,6 +42,10 @@ export interface TransformationInstance {
   duration?: number | null;
   /** Back-reference to a TransformationDef for relationship lookups (optional). */
   source?: unknown;
+  /** Player-facing name, copied from TransformationDef.displayName at apply time. */
+  displayName?: string;
+  /** Player-facing description, copied from TransformationDef.description at apply time. */
+  description?: string;
 }
 
 export interface PermanentPatch {

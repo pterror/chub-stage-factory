@@ -85,7 +85,7 @@ Driven by `/build-stage`, which invokes `/loop` (self-paced). Each iteration:
 
 Exit the loop when `STATUS.md` shows all tasks complete and the latest push passed the deploy workflow.
 
-**Checking loop progress:** `STATUS.md` is the authoritative log — open it any time to see which tasks are done, in-progress, or blocked. The `[loop] step N/M` markers in the Claude Code transcript give a live position. To check deploy status after a push: `bun run check-deploy`.
+**Checking loop progress:** `bun run status` — one command that prints git state, STATUS.md task summary, and latest deploy status (~20 lines). `STATUS.md` remains the authoritative log for full task history. The `[loop] step N/M` markers in the Claude Code transcript give a live position. To check deploy status after a push: `bun run check-deploy`.
 
 ## Chub stage API
 

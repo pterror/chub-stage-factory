@@ -51,6 +51,16 @@ In the promoted repo, set the env vars and run:
 STAGE_ID=<your-stage-id> CHUB_AUTH_TOKEN=<token> bun run deploy
 ```
 
+## Checking loop progress
+
+From the factory root:
+
+```sh
+bun run status    # ~20-line summary: git state, STATUS.md tasks/blockers, latest deploy
+```
+
+Prints branch, uncommitted count, last 3 commits, STATUS.md active section + open TODOs (top 5) + blockers, and the latest deploy run in one line. Exit code always 0.
+
 ## Checking deploy status
 
 From the factory or a promoted repo with `gh` configured:

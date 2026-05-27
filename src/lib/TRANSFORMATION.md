@@ -31,7 +31,7 @@ Body does not invoke trajectories automatically — call
 - `getRelationship(def, otherId)` — look up the relationship label from `def.conflicts`; falls back to `"*"` entry
 - `canApply(def, body)` — `CanApply` result; does not modify body
 - `getConflicts(def, body)` — two-perspective `ConflictRecord[]`
-- `apply(def, body, now, durationOverride?)` — create instance and push; returns `null` if `canApply` fails
+- `apply(def, body, now, durationOverride?)` — create instance and push; returns `null` if `canApply` fails. Copies `displayName` and `description` from the def onto the instance so callers of `getTransformations()` have player-facing fields without a registry back-reference.
 - `applyTrajectories(body, now)` — rewrite all instance tags from their def's trajectory
 - `fromDict(data)` — fill defaults for optional fields
 

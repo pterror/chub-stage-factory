@@ -24,7 +24,8 @@
     "test": "vitest run",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview",
-    "check-deploy": "node scripts/check-deploy.mjs"
+    "check-deploy": "node scripts/check-deploy.mjs",
+    "status": "node scripts/status.mjs"
   },
   "dependencies": {
     "@chub-ai/stages-ts": "^0.3.7",

@@ -180,7 +180,7 @@ export class TitsBodyStage extends withPersistence<ChatStateType, InitStateType,
               {activeTfs.map((tf) => {
                 const elapsed = now - tf.startTime;
                 const progress = TF_PROGRESS[tf.id];
-                const text = progress ? progress(elapsed, tf.duration) : `${TFS.get(tf.id)?.displayName ?? tf.id} — taking effect.`;
+                const text = progress ? progress(elapsed, tf.duration) : `${tf.displayName ?? tf.id} — taking effect.`;
                 return <li key={tf.id} style={{ fontSize: "0.85rem", color: "#bbb", marginBottom: 3 }}>{text}</li>;
               })}
             </ul>
