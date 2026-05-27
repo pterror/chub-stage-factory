@@ -40,5 +40,18 @@
       "Grep"
     ],
     "defaultMode": "acceptEdits"
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/home/me/git/pterror/chub-stage-factory/tooling/claude-hooks/post-history.sh"
+          }
+        ]
+      }
+    ]
   }
 }
