@@ -1,45 +1,84 @@
 /*
- * ui/ActionSurface.tsx — structured-verb button list.
+ * ui/ActionSurface.tsx — structured-verb button grid.
  *
- * WHAT: Renders the set of structured verbs the stage has derived from
- *       `schema × current state`. Each verb is { label, enabled, onClick }.
- *       The component does NOT derive which verbs are available — that is
- *       the stage's job. This component just renders what it's given.
+ * WHAT: Renders the set of available verbs as a button grid. Supports two
+ *       usage modes:
  *
- * WHY: Wave 2E shell component (FRONTEND-SHAPE.md §"src/lib/ui/").
- *      "Structured input is the fast path" (FRONTEND-SHAPE.md §"The shape").
- *      The list of enabled verbs is the stage-derived affordance surface;
- *      this component makes it visible to the player.
+ *   Legacy path (pre-Wave-2E call sites):
+ *     Pass `verbs: VerbEntry[]` — each entry has its own `onClick`.
+ *     ActionSurface renders them as-is. No introspect contract involved.
+ *
+ *   Introspect path (recommended for new stages):
+ *     Pass `availableVerbs`, `onVerbInvoke`, and optionally `verbFilter` /
+ *     `pending`. ActionSurface derives buttons from `VerbDescriptor[]` and
+ *     routes clicks through `onVerbInvoke`. This is the same `IntrospectAware`
+ *     contract used by ChoiceList, FormBuilder, and SlotPicker.
+ *
+ *   Both paths are backward-compatible. `verbs` and introspect props can
+ *   coexist; introspect-derived buttons are appended after any legacy `verbs`.
+ *
+ * WHY: Wave 2E §7 retrofit. The audit (UX-AUDIT §3.8 / Phase 5 Blocker #1)
+ *      found that world-primary rendered verb buttons wired to no-ops because
+ *      ActionSurface had no introspect contract. Retrofit instead of adding a
+ *      15th component (design doc §7). Existing call sites pass `verbs` arrays
+ *      pre-wired by the stage's `deriveVerbs()` helper — those continue to work
+ *      unchanged.
  *
  * Styling: inline styles (repo convention).
  *
  * SHAPE:
- *   interface VerbEntry { id; label; enabled?; onClick; hint? }
- *   interface ActionSurfaceProps { verbs; columns?; style? }
+ *   interface VerbEntry       { id; label; enabled?; onClick; hint? }  ← legacy
+ *   interface IntrospectAware { availableVerbs?; onVerbInvoke?; verbFilter?; pending? }
+ *   interface ActionSurfaceProps extends IntrospectAware
+ *     { verbs?; columns?; style? }
  *   ActionSurface(props): ReactElement
  */
 
 import { ReactElement, CSSProperties } from "react";
+import type { VerbDescriptor, InvocationResult } from "../introspect";
+
+// ---- IntrospectAware contract (identical shape used across Batch C) ----
+
+export interface IntrospectAware {
+  /** Verbs to surface via the introspect path. When provided, buttons are
+   *  derived from this list and routed through `onVerbInvoke`. */
+  availableVerbs?: VerbDescriptor[];
+  /** Called when the user clicks an introspect-derived button. */
+  onVerbInvoke?: (name: string, args?: Record<string, unknown>) =>
+    Promise<InvocationResult> | void;
+  /** Optional filter applied to `availableVerbs` before render. */
+  verbFilter?: (v: VerbDescriptor) => boolean;
+  /** Disabled state while a previous invocation is in flight. */
+  pending?: boolean;
+}
+
+// ---- Legacy VerbEntry (kept for backward compatibility) ----
 
 export interface VerbEntry {
-  /** Unique id for the verb — used as React key. */
+  /** Unique id — used as React key. */
   id: string;
   /** Display label shown on the button. */
   label: string;
   /** Whether the action is currently available. Default true. */
   enabled?: boolean;
-  /** Called when the user clicks the button. */
+  /** Called when the user clicks the button (legacy path). */
   onClick: () => void;
   /** Optional tooltip / one-line description. */
   hint?: string;
 }
 
-export interface ActionSurfaceProps {
-  verbs: VerbEntry[];
+export interface ActionSurfaceProps extends IntrospectAware {
+  /** Legacy verb entries. Each carries its own `onClick`. Rendered first.
+   *  Remains the path used by world-primary's `deriveVerbs()` helper, which
+   *  pre-wires `onClick` to `this.invokeVerb` — backward-compatible with
+   *  the introspect contract in effect. */
+  verbs?: VerbEntry[];
   /** How many columns to lay out buttons in. Default 2. */
   columns?: number;
   style?: CSSProperties;
 }
+
+// ---- Styles ----
 
 const container = (columns: number): CSSProperties => ({
   display: "grid",
@@ -63,12 +102,50 @@ const btn = (enabled: boolean): CSSProperties => ({
   transition: "background 0.1s ease",
 });
 
+// ---- Component ----
+
 export function ActionSurface(props: ActionSurfaceProps): ReactElement {
-  const { verbs, columns = 2, style } = props;
+  const {
+    verbs = [],
+    columns = 2,
+    style,
+    // introspect props
+    availableVerbs,
+    onVerbInvoke,
+    verbFilter,
+    pending = false,
+  } = props;
+
+  // Derive introspect-path buttons when availableVerbs is provided.
+  const introspectButtons: VerbEntry[] = availableVerbs
+    ? availableVerbs
+        .filter(verbFilter ?? (() => true))
+        .map((v) => ({
+          id: v.name,
+          label: v.label ?? v.name,
+          enabled: v.enabled !== false && !pending,
+          hint: v.description,
+          onClick: () => {
+            if (onVerbInvoke) void onVerbInvoke(v.name);
+          },
+        }))
+    : [];
+
+  // Legacy buttons respect `pending` (disable them while processing).
+  const legacyButtons: VerbEntry[] = verbs.map((v) => ({
+    ...v,
+    enabled: v.enabled !== false && !pending,
+  }));
+
+  // Introspect-derived buttons after legacy ones. If a stage uses
+  // `deriveVerbs()` (as world-primary does), it passes legacy VerbEntry[]
+  // pre-wired to invokeVerb — introspectButtons will be empty. If a stage
+  // passes `availableVerbs` directly, legacyButtons will be empty.
+  const allButtons = [...legacyButtons, ...introspectButtons];
 
   return (
     <div style={{ ...container(columns), ...style }}>
-      {verbs.map((v) => {
+      {allButtons.map((v) => {
         const isEnabled = v.enabled !== false;
         return (
           <button
