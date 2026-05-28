@@ -20,19 +20,7 @@
  */
 
 import { ReactElement, CSSProperties, useState } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-/** Common shape for components that surface stage verbs. */
-export interface IntrospectAware {
-  /** Verbs to surface. */
-  availableVerbs?: VerbDescriptor[];
-  /** Called when the user picks a verb. */
-  onVerbInvoke?: (name: string, args?: Record<string, unknown>) => Promise<InvocationResult> | void;
-  /** Optional filter applied to availableVerbs before render. */
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  /** Disabled state while a previous invocation is in flight. */
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 export interface RegistryEntry {
   id: string;

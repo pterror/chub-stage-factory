@@ -17,17 +17,7 @@
  */
 
 import { ReactElement, CSSProperties, useState } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-// ---- IntrospectAware ----
-
-export interface IntrospectAware {
-  availableVerbs?: VerbDescriptor[];
-  onVerbInvoke?: (name: string, args?: Record<string, unknown>) =>
-    Promise<InvocationResult> | void;
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 // ---- SaveSlot ----
 

@@ -35,22 +35,7 @@
  */
 
 import { ReactElement, CSSProperties } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-// ---- IntrospectAware contract (identical shape used across Batch C) ----
-
-export interface IntrospectAware {
-  /** Verbs to surface via the introspect path. When provided, buttons are
-   *  derived from this list and routed through `onVerbInvoke`. */
-  availableVerbs?: VerbDescriptor[];
-  /** Called when the user clicks an introspect-derived button. */
-  onVerbInvoke?: (name: string, args?: Record<string, unknown>) =>
-    Promise<InvocationResult> | void;
-  /** Optional filter applied to `availableVerbs` before render. */
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  /** Disabled state while a previous invocation is in flight. */
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 // ---- Legacy VerbEntry (kept for backward compatibility) ----
 

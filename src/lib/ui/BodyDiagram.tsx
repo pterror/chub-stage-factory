@@ -21,14 +21,7 @@
  */
 
 import { ReactElement, CSSProperties } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-export interface IntrospectAwareBody {
-  availableVerbs?: VerbDescriptor[];
-  onVerbInvoke?: (name: string, args?: Record<string, unknown>) => Promise<InvocationResult> | void;
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 export interface BodySlot {
   /** Stable slot id ("head", "torso", "tail", …). */
@@ -43,7 +36,7 @@ export interface BodySlot {
   verb?: string;
 }
 
-export interface BodyDiagramProps extends IntrospectAwareBody {
+export interface BodyDiagramProps extends IntrospectAware {
   slots: BodySlot[];
   /** "humanoid" positions slots on a person silhouette;
    *  "list" renders a vertical list. Default "humanoid". */

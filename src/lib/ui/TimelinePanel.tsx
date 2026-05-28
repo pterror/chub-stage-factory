@@ -19,14 +19,7 @@
  */
 
 import { ReactElement, CSSProperties, useState } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-export interface IntrospectAwarePanel {
-  availableVerbs?: VerbDescriptor[];
-  onVerbInvoke?: (name: string, args?: Record<string, unknown>) => Promise<InvocationResult> | void;
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 export interface TimelineEntry {
   id: string;
@@ -42,7 +35,7 @@ export interface TimelineEntry {
   verb?: string;
 }
 
-export interface TimelinePanelProps extends IntrospectAwarePanel {
+export interface TimelinePanelProps extends IntrospectAware {
   entries: TimelineEntry[];
   /** Max visible entries. Older events collapse to "N minor events". Default 12. */
   maxItems?: number;

@@ -22,34 +22,7 @@
  */
 
 import { ReactElement, CSSProperties, useMemo } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-// ---------------------------------------------------------------------------
-// IntrospectAware contract (shared by all Wave 2E components)
-// ---------------------------------------------------------------------------
-
-/** Common shape for components that surface stage verbs. */
-export interface IntrospectAware {
-  /** Verbs to surface. When omitted and `stage` is provided the component
-   *  calls `stage.availableVerbs()` itself. */
-  availableVerbs?: VerbDescriptor[];
-
-  /** Called when the user picks a verb. When omitted and `stage` is
-   *  provided the component calls `stage.invokeVerb` itself. */
-  onVerbInvoke?: (
-    name: string,
-    args?: Record<string, unknown>,
-  ) => Promise<InvocationResult> | void;
-
-  /** Optional filter applied to `availableVerbs` before render. Used by
-   *  group-scoped components (e.g. a movement-only TileGrid filters to
-   *  `v.group === "move"`). */
-  verbFilter?: (v: VerbDescriptor) => boolean;
-
-  /** Disabled state while a previous invocation is in flight. Components
-   *  grey all interactive elements while true. */
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 // ---------------------------------------------------------------------------
 // TileGridCell

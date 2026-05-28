@@ -27,22 +27,7 @@
  */
 
 import { ReactElement, CSSProperties, useMemo } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-// ---------------------------------------------------------------------------
-// Re-export IntrospectAware so consumers can import from a single file.
-// The canonical definition lives in TileGrid.tsx.
-// ---------------------------------------------------------------------------
-
-export interface IntrospectAware {
-  availableVerbs?: VerbDescriptor[];
-  onVerbInvoke?: (
-    name: string,
-    args?: Record<string, unknown>,
-  ) => Promise<InvocationResult> | void;
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 // ---------------------------------------------------------------------------
 // HexGridCell

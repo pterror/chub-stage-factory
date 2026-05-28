@@ -20,17 +20,8 @@
  */
 
 import { ReactElement, CSSProperties, useState } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-// ---- IntrospectAware (re-exported so consumers can import from here) ----
-
-export interface IntrospectAware {
-  availableVerbs?: VerbDescriptor[];
-  onVerbInvoke?: (name: string, args?: Record<string, unknown>) =>
-    Promise<InvocationResult> | void;
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  pending?: boolean;
-}
+import type { VerbDescriptor } from "../introspect";
+import type { IntrospectAware } from "./introspect-aware";
 
 // ---- FormField types ----
 
