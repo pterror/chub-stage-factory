@@ -1,3 +1,46 @@
+# new-composer.mjs
+
+Scaffold a new pattern composer file and companion Markdown doc.
+
+## Usage
+
+```
+bun run new:composer <name> --bucket <world|character|combat|lifecycle|synergy> [--shape bundle|subsystem|adhoc]
+# or
+node scripts/new-composer.mjs <name> --bucket <bucket> [--shape <shape>]
+```
+
+### Arguments
+
+| Argument            | Required | Description |
+|---------------------|----------|-------------|
+| `<name>`            | yes      | Composer name, kebab-case (e.g. `focus`, `daily-vignette`). |
+| `--bucket <bucket>` | yes      | Subdirectory: `world`, `character`, `combat`, `lifecycle`, or `synergy`. |
+| `--shape <shape>`   | no       | Return shape stub: `bundle` (default), `subsystem`, or `adhoc`. See `RETURN-SHAPES.md`. |
+
+### What it generates
+
+- `src/lib/patterns/<bucket>/<name>.ts` — WHAT/WHY/SHAPE header + factory function stub returning the chosen shape.
+- `src/lib/patterns/<bucket>/<NAME>.md` — companion doc with Purpose / API / Example / Gotchas headings.
+
+### Example
+
+```sh
+bun run new:composer focus --bucket lifecycle --shape bundle
+bun run new:composer cache-by-key --bucket synergy --shape subsystem
+```
+
+### Next steps printed after generation
+
+1. Fill in the WHAT/WHY/SHAPE header.
+2. Implement the factory function.
+3. Fill in the companion `.md`.
+4. Add a recipe entry to `src/lib/PATTERNS.md`.
+5. Mark the item ✅ in `src/lib/ROADMAP.md`.
+6. Wire a usage example.
+
+---
+
 # promote-example.mjs
 
 Copies one example out of the chub-stage-factory into a new directory

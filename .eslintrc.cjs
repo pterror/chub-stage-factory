@@ -59,6 +59,14 @@ module.exports = {
       },
     },
     {
+      // FormBuilder exports a helper function (formFieldsFromVerb) alongside its
+      // React component — intentional co-location for the form-building API.
+      files: ['src/lib/ui/FormBuilder.tsx'],
+      rules: {
+        'react-refresh/only-export-components': 'off',
+      },
+    },
+    {
       // voronoi-influence-map: hoverConfig/entryConfig are derived from prop
       // conditionals — wrapping in useMemo is the correct fix but is deferred
       // to avoid changing animation behaviour in this pass.
