@@ -16,11 +16,10 @@ jobs:
   build-and-upload:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: Set up Node
-        uses: actions/setup-node@v2
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: '21.7.1'
+          bun-version: latest
 
       - name: Confirm CHUB_AUTH_TOKEN is set
         env:
@@ -104,10 +103,10 @@ jobs:
             fi
           done
       - name: Install dependencies
-        run: yarn install
+        run: bun install --frozen-lockfile
 
       - name: Build
-        run: yarn build
+        run: bun run build
 
       - name: Zip the build folder
         run: cd dist && zip -r ../build.zip * && cd ../
@@ -135,7 +134,7 @@ jobs:
         # Assumes tag is of form v1.0.0, strips the 'v'
 
       - name: Update package.json version
-        run: yarn build --mode lib && yarn version --new-version ${{ steps.get_version.outputs.VERSION }} --no-git-tag-version && yarn publish --access public
+        run: bun run build --mode lib && bun version ${{ steps.get_version.outputs.VERSION }} && bun publish --access public
         if: github.event_name == 'push' && contains(github.ref, 'refs/tags/')
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
