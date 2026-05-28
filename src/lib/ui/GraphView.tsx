@@ -46,21 +46,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { VerbDescriptor, InvocationResult } from "../introspect";
-
-// ---------------------------------------------------------------------------
-// IntrospectAware (local copy — each Batch B file is independently importable)
-// ---------------------------------------------------------------------------
-
-export interface IntrospectAware {
-  availableVerbs?: VerbDescriptor[];
-  onVerbInvoke?: (
-    name: string,
-    args?: Record<string, unknown>,
-  ) => Promise<InvocationResult> | void;
-  verbFilter?: (v: VerbDescriptor) => boolean;
-  pending?: boolean;
-}
+import type { IntrospectAware } from "./introspect-aware";
 
 // ---------------------------------------------------------------------------
 // GraphNode / GraphEdge
@@ -291,7 +277,7 @@ export function GraphView<N extends GraphNode, E extends GraphEdge>(
     edges,
     layout = "force",
     renderNode,
-    renderEdge: _renderEdge,
+    renderEdge,
     onNodeClick,
     onEdgeClick,
     availableVerbs,
@@ -380,6 +366,32 @@ export function GraphView<N extends GraphNode, E extends GraphEdge>(
     const endX = tp.x - nx * (DEFAULT_NODE_W / 2 + 4);
     const endY = tp.y - ny * (DEFAULT_NODE_H / 2 + 4);
     const arrowSize = 8;
+
+    // When a custom edge renderer is supplied, defer the visible geometry to
+    // it (still wrapped in the clickable <g>, with a transparent hit line so
+    // bridged-mode clicks keep working). Otherwise render the default line +
+    // arrowhead + label.
+    if (renderEdge) {
+      return (
+        <g
+          key={edge.id}
+          onClick={interactive ? handleEdgeClick : undefined}
+          style={{ cursor: interactive ? "pointer" : "default" }}
+        >
+          {renderEdge(edge, interactive)}
+          {interactive && (
+            <line
+              x1={sp.x}
+              y1={sp.y}
+              x2={endX}
+              y2={endY}
+              stroke="transparent"
+              strokeWidth={10}
+            />
+          )}
+        </g>
+      );
+    }
 
     return (
       <g

@@ -13,7 +13,7 @@
  *
  * SHAPE:
  *   interface StatTier { at; label; color? }
- *   interface StatTierProps { label; value; tiers; showProgress?; style? }
+ *   interface StatTierProps { label; value; tiers; showProgress?; showValue?; style? }
  *   StatTier(props): ReactElement
  */
 
@@ -39,6 +39,12 @@ export interface StatTierProps {
   tiers: StatTier[];
   /** Show a 5-pip progress strip within the current tier. Default true. */
   showProgress?: boolean;
+  /** Render the raw numeric value beside the tier label. Default true —
+   *  matches StatBar's `showValue` treatment; the UX audit found that
+   *  hiding the number entirely produced "what does this mean?" confusion
+   *  (WAVE-2E-DESIGN.md §3.9 opacity profile). Stages that want a purely
+   *  qualitative readout pass `showValue={false}`. */
+  showValue?: boolean;
   style?: CSSProperties;
 }
 
@@ -79,6 +85,11 @@ const tierLabelStyle: CSSProperties = {
   fontSize: "12px",
 };
 
+const valueStyle: CSSProperties = {
+  color: "#888",
+  fontSize: "11px",
+};
+
 const pipRow: CSSProperties = {
   display: "flex",
   gap: "3px",
@@ -86,7 +97,7 @@ const pipRow: CSSProperties = {
 };
 
 export function StatTier(props: StatTierProps): ReactElement {
-  const { label, value, tiers, showProgress = true, style } = props;
+  const { label, value, tiers, showProgress = true, showValue = true, style } = props;
 
   const sorted = [...tiers].sort((a, b) => a.at - b.at);
   const idx = currentTierIndex(value, sorted);
@@ -128,6 +139,7 @@ export function StatTier(props: StatTierProps): ReactElement {
         )}
         <span style={tierLabelStyle}>
           {tier ? tier.label : "—"}
+          {showValue && <span style={valueStyle}> ({value})</span>}
         </span>
       </div>
     </div>

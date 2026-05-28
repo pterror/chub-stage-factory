@@ -18,6 +18,7 @@ in `ScoreBoard` for mixed dashboards.
 | `value` | `number` | required | Current numeric value. |
 | `tiers` | `StatTier[]` | required | Tier ladder, ascending by `at`. The component picks the highest tier whose `at ≤ value`. |
 | `showProgress` | `boolean` | `true` | Show 5-pip progress within the current tier. |
+| `showValue` | `boolean` | `true` | Render the raw numeric value beside the tier label, matching `StatBar`'s `showValue`. The UX audit found that hiding the number entirely caused "what does this mean?" confusion; default shows it. Pass `false` for a purely qualitative readout. |
 | `style` | `CSSProperties` | — | Outer container style override. |
 
 ### `StatTier` interface
