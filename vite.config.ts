@@ -4,8 +4,16 @@ import dts from 'vite-plugin-dts'
 import { resolve } from 'path'
 
 export default defineConfig(({ mode }) => {
+    // Restrict vitest to workspace source so Nix flake-input snapshots in
+    // .direnv/flake-inputs/ are never picked up as test files. Those paths
+    // have no node_modules, causing optional-peer-dep stubs (e.g. three) to
+    // fail to resolve.
+    const test = {
+        include: ['src/**/*.test.{ts,tsx}'],
+    };
     if (mode === 'headless') {
         return {
+            test,
             plugins: [react()],
             build: {
                 lib: {
@@ -28,7 +36,8 @@ export default defineConfig(({ mode }) => {
             },
         };
     } else if (mode === 'lib') {
-        return { plugins: [
+        return { test,
+            plugins: [
                 react(),
                 dts({
                     outDir: ['dist'],
@@ -58,6 +67,7 @@ export default defineConfig(({ mode }) => {
         }
     } else {
         return {
+            test,
             plugins: [react()],
             ...(process.env.VITE_PUBLIC_DIR ? { publicDir: process.env.VITE_PUBLIC_DIR } : {}),
         }
