@@ -85,7 +85,7 @@ and example stages. Actual callers in `.ts`/`.tsx` production code:
 |------|-------------|----------------|---------------|
 | `src/lib/trigger.ts` | 1 | 2 (`examples/world-primary/Stage.tsx` + `src/lib/patterns/freeform-pipeline.ts`) | `@experimental` removed |
 | `src/lib/generate.ts` | 1 | 2 (`examples/world-primary/Stage.tsx` + `src/lib/patterns/freeform-pipeline.ts`) | `@experimental` removed |
-| `src/lib/chat-window.ts` | 0 | 0 (docs only) | kept `@experimental` |
+| `src/lib/chat-window.ts` | 0 | 1 (`src/lib/patterns/synergy/sliding-window-chat.ts`, 2026-05-29) | `@experimental` **removed** |
 | `src/lib/embeddings.ts` | 0 | 1 (`src/lib/patterns/synergy/semantic-recall-overlay.ts`) but that file itself has 0 callers | kept `@experimental` |
 | `src/lib/3d/scene.tsx` | 0 | 0 | kept `@experimental` |
 | `src/lib/3d/loader.tsx` | 0 | 0 | kept `@experimental` |

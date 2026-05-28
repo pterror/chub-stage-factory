@@ -1,4 +1,3 @@
-// @experimental — used by 0-1 callers; API may change.
 /*
  * chat-window.ts — bounded recent-turns window with summarize-on-roll-out.
  *
