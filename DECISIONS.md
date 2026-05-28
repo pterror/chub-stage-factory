@@ -285,3 +285,31 @@ or any file under `examples/` must run `bun run build:examples` in addition to `
 **Also fixed in this pass:** `scripts/build-example.mjs` used `npx vite` which is unavailable
 on NixOS; changed to `bunx vite` so `build:examples` runs locally without a separate Node/npm
 install.
+
+## 16. Wave 2E complete — 14 introspect-aware ui components, barrel wired (2026-05-29)
+
+All 14 Wave 2E component primitives shipped under `src/lib/ui/`, each
+introspect-aware from the start (bridged-mode `availableVerbs` + `onVerbInvoke`,
+with a plain fallback). The shared `IntrospectAware` interface — which the
+parallel batches each inlined a private copy of (`IntrospectAware`,
+`IntrospectAwareBody`, `IntrospectAwarePanel`) to stay independently buildable —
+is now defined once in `ui/introspect-aware.ts` and imported by all 12
+action-surfacing components. The barrel `ui/index.ts` re-exports everything
+(named exports, matching the repo's per-file convention) additively, so existing
+per-file imports keep working.
+
+**Deviations reconciled:** (1) `StatTier` now shows the raw numeric value inline
+by default (`showValue`, default true), matching StatBar's treatment and the
+design's opacity profile, rather than the value-less render Batch A shipped.
+(2) `GraphView` `renderEdge` is now actually called when supplied (it was
+accepted but unused) — no dead props. (3) `HexGrid` hex math left inlined per
+design (extraction to `hex-math.ts` is Wave 2F); confirmed correct against the
+redblobgames reference.
+
+**Full-tree verification** (the point of the wave's final pass, since
+intermediate batch greens built against each other's in-progress files):
+`build` ✅, `lint` ✅, `build:examples` 9/9 ✅, `test:smoke` all-pass ✅,
+`test` 29-pass — the lone failing suite, `3d/assets.test.ts`, is a pre-existing
+`three` optional-peer-dep resolution failure with no relationship to Wave 2E (no
+Wave 2E commit touches `src/lib/3d/`; the test's last touch is commit `18e37c4`,
+the Wave 2F asset-cache feature).
