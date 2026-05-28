@@ -211,9 +211,11 @@ Default contract + knob list derived from Warframe Helminth subsume mechanics �
 
 Parallel-developable with Waves 2A, 2B, 2C.
 
-### Wave 2E — UI primitives
+### Wave 2E — UI primitives ✅
 
 The "React component primitives beyond optional `SlotPicker` — UI is the stage author's concern" position from the original ROADMAP is reversed. UI components are primitives too; refusing to ship them just forces every stage author to hand-roll the same set, violating the comprehensive-everything mandate. Wave 2E ships them.
+
+**Status: COMPLETE (2026-05-29).** All 14 introspect-aware components shipped under `src/lib/ui/`: StatBar, StatTier, RegistryGallery, TimelinePanel, BodyDiagram (Batch A); TileGrid, HexGrid, GraphView (Batch B); ChoiceList, ModalPicker, FormBuilder, SlotPicker + ActionSurface retrofit (Batch C); ActorPanel, ScoreBoard (Batch D). The shared `IntrospectAware` contract is consolidated in `src/lib/ui/introspect-aware.ts`; the barrel `src/lib/ui/index.ts` re-exports all of them plus the pre-existing shell components. Full tree green: `build`, `lint`, `build:examples` (9/9), `test` (29 pass; the one failing suite `3d/assets.test.ts` is a pre-existing `three` optional-peer-dep resolution failure unrelated to Wave 2E), `test:smoke` (all pass).
 
 Components ship as `src/lib/ui/*.tsx`, prop-customizable (theme/colors/cell-render/interaction-callbacks all overridable), composable, skinnable.
 
@@ -521,7 +523,7 @@ Read-only investigation tasks that should precede their dependent design work.
   - `src/lib/intent.ts` — Wave 2B narrow cut. Deterministic verb-noun-prep grammar with synonym table + scope resolution; `LlmFallback.quietCall` fallback on grammar miss. **Status: PARTIALLY LANDED** (full Wave 2B still needs `world.ts` scope integration and Zork/CCA grammar prior art).
   - `src/lib/patterns/render-trigger.ts` — Wave 2I pattern. `renderTrigger({ stub, assembler, runner })` wires trigger-fires → ContextAssembler → LlmPipeline → prose. **Status: SHIPPED**.
   - `src/lib/patterns/freeform-pipeline.ts` — Wave 2I pattern. Full escape-hatch loop: freeform text → intent parse → oracle delta → policy (`strict`/`coerce`; `extend` is TODO) → apply → render. **Status: SHIPPED** (`extend` policy is not implemented; throws with TODO).
-  - `src/lib/ui/` shell components — Wave 2E **shell layer** (distinct from game UI components like TileGrid/HexGrid/ActorPanel which remain pending): `WorldStatePanel`, `ActionSurface`, `ScenePane`, `ChatLogSidebar`, `FreeformInput`. **Status: PARTIALLY LANDED** (game UI primitives TileGrid, HexGrid, GraphView, ActorPanel, StatBar, ScoreBoard, ChoiceList, FormBuilder, SlotPicker, ModalPicker, TimelinePanel, RegistryGallery still pending).
+  - `src/lib/ui/` shell components — Wave 2E **shell layer**: `WorldStatePanel`, `ActionSurface`, `ScenePane`, `ChatLogSidebar`, `FreeformInput`. **Status: COMPLETE** — the game UI primitives (TileGrid, HexGrid, GraphView, ActorPanel, StatBar, StatTier, ScoreBoard, ChoiceList, FormBuilder, SlotPicker, ModalPicker, TimelinePanel, RegistryGallery, BodyDiagram) all landed 2026-05-29 alongside the `ActionSurface` introspect retrofit. See the "Wave 2E — UI primitives ✅" section above.
   - `examples/world-primary/` — Wave 3 partial. Demonstrates the FRONTEND-SHAPE.md design end-to-end: state machine + ConditionalTrigger + renderTrigger + freeformPipeline + full UI shell. **Status: SHIPPED**.
 - **Composer build pass 2026-05-27** — 33 composers + `world.ts` primitive shipped across 6 parallel agent batches. See DECISIONS.md §13 for LOC totals and reconciliation notes.
   - `src/lib/world.ts` — Wave 2B world graph primitive (rooms, exits, scope). **Status: SHIPPED**.

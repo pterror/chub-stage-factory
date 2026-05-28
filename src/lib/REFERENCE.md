@@ -560,6 +560,30 @@ table and full example.
 - `cubicEase(t): number`
 - Hash-seeded sine helpers for deterministic jitter
 
+## `ui/` — component library (Wave 2E)
+
+14 introspect-aware React primitives. Barrel: `ui/index.ts` re-exports all of
+them plus the shell components. Shared contract: `ui/introspect-aware.ts`
+(`interface IntrospectAware { availableVerbs?; onVerbInvoke?; verbFilter?; pending? }`),
+which every action-surfacing component extends.
+
+- `ui/introspect-aware.ts` — `interface IntrospectAware`
+- `ui/StatBar.tsx` — [StatBar.md](./ui/StatBar.md) — `StatBar(props): ReactElement`; `interface StatBarProps`
+- `ui/StatTier.tsx` — [StatTier.md](./ui/StatTier.md) — `StatTier(props)`; `interface StatTier { at, label, color? }`, `interface StatTierProps` (value shown inline by default via `showValue`)
+- `ui/RegistryGallery.tsx` — [RegistryGallery.md](./ui/RegistryGallery.md) — `RegistryGallery(props)`; `interface RegistryEntry`, `interface RegistryGalleryProps`
+- `ui/TimelinePanel.tsx` — [TimelinePanel.md](./ui/TimelinePanel.md) — `TimelinePanel(props)`; `interface TimelineEntry`, `interface TimelinePanelProps`
+- `ui/BodyDiagram.tsx` — [BodyDiagram.md](./ui/BodyDiagram.md) — `BodyDiagram(props)`; `interface BodySlot`, `interface BodyDiagramProps`
+- `ui/TileGrid.tsx` — [TileGrid.md](./ui/TileGrid.md) — `TileGrid<C>(props)`; `interface TileGridCell`, `interface TileGridProps<C>`
+- `ui/HexGrid.tsx` — [HexGrid.md](./ui/HexGrid.md) — `HexGrid<C>(props)`; `interface HexGridCell`, `interface HexGridProps<C>` (axial coords; hex math inlined, extracted in Wave 2F)
+- `ui/GraphView.tsx` — [GraphView.md](./ui/GraphView.md) — `GraphView<N,E>(props)`; `interface GraphNode`, `interface GraphEdge`, `interface GraphViewProps<N,E>` (from-scratch force sim; `renderNode`/`renderEdge` both wired)
+- `ui/ChoiceList.tsx` — `ChoiceList(props)`; `interface Choice`, `interface ChoiceListProps`
+- `ui/ModalPicker.tsx` — `ModalPicker(props)`; `interface ModalPickerProps` (structural; child carries the introspect contract)
+- `ui/FormBuilder.tsx` — `FormBuilder(props)`; `interface FormField`, `interface FormBuilderProps`; `formFieldsFromVerb(v): FormField[]`
+- `ui/SlotPicker.tsx` — `SlotPicker(props)`; `interface SaveSlot`, `interface SlotPickerProps`
+- `ui/ActorPanel.tsx` — [ActorPanel.md](./ui/ActorPanel.md) — `ActorPanel(props)`; `interface ActorStat`, `interface ActorPanelProps` (composes BodyDiagram + StatBar + StatTier + RegistryGallery)
+- `ui/ScoreBoard.tsx` — [ScoreBoard.md](./ui/ScoreBoard.md) — `ScoreBoard(props)`; `interface ScoreEntry`, `interface ScoreBoardProps` (composes StatBar + StatTier)
+- `ui/ActionSurface.tsx` — `ActionSurface(props)`; `interface VerbEntry` (legacy), `interface ActionSurfaceProps extends IntrospectAware` — retrofitted to the introspect contract in Wave 2E
+
 ## `3d/` — [3d/README.md](3d/README.md)
 
 ### `3d/scene.tsx` (Wave 2F)
