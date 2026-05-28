@@ -27,7 +27,7 @@
  *   function formCollectionPattern(init?: FormCollectionInit): FormCollection
  */
 
-import { PlaceholderRegistry } from "../registry";
+import { PlaceholderRegistry } from "../../registry";
 import type { Form } from "./form";
 
 export interface FormCollectionInit {

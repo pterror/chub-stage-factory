@@ -45,9 +45,9 @@
  *   function lineagePattern(init): LineageBundle
  */
 
-import { type ActorId, ActorPool, type Actor } from "../actor";
-import { buildGraph, type BuildGraphOptions, type GraphNode } from "../procgen";
-import type { RngStream } from "../rng";
+import { type ActorId, ActorPool, type Actor } from "../../actor";
+import { buildGraph, type BuildGraphOptions, type GraphNode } from "../../procgen";
+import type { RngStream } from "../../rng";
 
 /** Affinity key used for parent→child direction on Actor.affinity. */
 const PARENT_AFFINITY_KEY = "__lineage_parent__";

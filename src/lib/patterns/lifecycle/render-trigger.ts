@@ -38,8 +38,8 @@ import {
   type ContextContributor,
   type Section,
   estimateTokens,
-} from "../context";
-import type { LlmPipelineRunner } from "../llm-pipeline";
+} from "../../context";
+import type { LlmPipelineRunner } from "../../llm-pipeline";
 
 /**
  * Structured prose directive — the "stub" the stage author provides per

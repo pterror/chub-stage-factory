@@ -39,11 +39,11 @@
  *   function sandboxPattern<S>(init): SandboxBundle<S>
  */
 
-import { type ActorPool } from "../actor";
-import { parseIntent, type Intent, type ParseIntentOptions } from "../intent";
-import { type RngStream } from "../rng";
-import { Timeline } from "../timeline";
-import { type World, type WorldEvent, type ScopeOptions } from "../world";
+import { type ActorPool } from "../../actor";
+import { parseIntent, type Intent, type ParseIntentOptions } from "../../intent";
+import { type RngStream } from "../../rng";
+import { Timeline } from "../../timeline";
+import { type World, type WorldEvent, type ScopeOptions } from "../../world";
 
 export interface SandboxInit {
   world: World;

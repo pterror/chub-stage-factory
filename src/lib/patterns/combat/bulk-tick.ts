@@ -39,8 +39,8 @@
  *   function bulkTickPattern<E>(init): BulkTickBundle<E>
  */
 
-import { type Actor, ActorPool } from "../actor";
-import { Timeline } from "../timeline";
+import { type Actor, ActorPool } from "../../actor";
+import { Timeline } from "../../timeline";
 
 export type TickEventProcessor<E> = (actor: Actor, now: number) => E[];
 

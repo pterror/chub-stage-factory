@@ -20,7 +20,7 @@
  *   function graftingPattern(opts: GraftingOptions): GraftingBundle
  */
 
-import { Registry, PlaceholderRegistry } from "../registry";
+import { Registry, PlaceholderRegistry } from "../../registry";
 import type { Form } from "./form";
 
 // ─── Public types ───────────────────────────────────────────────────────────

@@ -37,9 +37,9 @@
  */
 
 import type { GenerationService } from "@chub-ai/stages-ts";
-import type { Actor, ActorPool } from "../actor";
-import { generate } from "../generate";
-import { Timeline, summarize } from "../timeline";
+import type { Actor, ActorPool } from "../../actor";
+import { generate } from "../../generate";
+import { Timeline, summarize } from "../../timeline";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

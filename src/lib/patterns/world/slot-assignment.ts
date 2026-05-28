@@ -48,9 +48,9 @@
  *   function slotAssignmentPattern<S>(init): SlotAssignmentBundle<S>
  */
 
-import { type Refs, type Resolvers, evaluate as evalPredicate } from "../predicate";
-import type { Predicate } from "../predicate";
-import { type World } from "../world";
+import { type Refs, type Resolvers, evaluate as evalPredicate } from "../../predicate";
+import type { Predicate } from "../../predicate";
+import { type World } from "../../world";
 
 export interface SlotDef<S = unknown> {
   roomId: string;

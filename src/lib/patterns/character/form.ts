@@ -22,11 +22,11 @@
  *   function formPattern(init: FormInit): Form
  */
 
-import { Actor, type StatName } from "../actor";
-import type { Body } from "../body";
-import type { Stat } from "../stats";
-import type { ActionDef } from "../action";
-import { Registry } from "../registry";
+import { Actor, type StatName } from "../../actor";
+import type { Body } from "../../body";
+import type { Stat } from "../../stats";
+import type { ActionDef } from "../../action";
+import { Registry } from "../../registry";
 
 export interface FormAesthetics {
   /** Player-facing name shown in UI. */

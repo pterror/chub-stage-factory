@@ -29,8 +29,8 @@
  *   function dialoguePattern<C, S, A>(init): DialogueBundle<C, S, A>
  */
 
-import { Fsm, type StateDef } from "../fsm";
-import { type Predicate, type Refs, type Resolvers, evaluate } from "../predicate";
+import { Fsm, type StateDef } from "../../fsm";
+import { type Predicate, type Refs, type Resolvers, evaluate } from "../../predicate";
 
 export interface DialogueChoice<S = unknown> {
   /** Choice id, used as the Fsm event name. */

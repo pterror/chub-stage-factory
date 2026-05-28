@@ -34,11 +34,11 @@
  *   function worldExplorationPattern(init): WorldExplorationBundle
  */
 
-import { type ActorPool } from "../actor";
-import { parseIntent, type Intent, type ParseIntentOptions } from "../intent";
-import { type Resolvers } from "../predicate";
-import { Timeline } from "../timeline";
-import { type World, type WorldEvent, type ScopeOptions, worldResolvers } from "../world";
+import { type ActorPool } from "../../actor";
+import { parseIntent, type Intent, type ParseIntentOptions } from "../../intent";
+import { type Resolvers } from "../../predicate";
+import { Timeline } from "../../timeline";
+import { type World, type WorldEvent, type ScopeOptions, worldResolvers } from "../../world";
 
 export interface WorldExplorationInit {
   world: World;

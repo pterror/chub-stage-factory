@@ -33,11 +33,11 @@
  */
 
 import type { GenerationService } from "@chub-ai/stages-ts";
-import type { Actor } from "../actor";
-import { generate } from "../generate";
-import { Timeline } from "../timeline";
-import { assembleObservations, formatObservations } from "../observation";
-import type { ObservationSource, AssembleOptions } from "../observation";
+import type { Actor } from "../../actor";
+import { generate } from "../../generate";
+import { Timeline } from "../../timeline";
+import { assembleObservations, formatObservations } from "../../observation";
+import type { ObservationSource, AssembleOptions } from "../../observation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

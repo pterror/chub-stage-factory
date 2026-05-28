@@ -31,16 +31,16 @@
  */
 
 import type { Message, StageResponse } from "@chub-ai/stages-ts";
-import { Body } from "../body";
-import { Registry } from "../registry";
-import { Timeline } from "../timeline";
-import { type TransformationDef, apply, applyTrajectories, getConflicts } from "../transformation";
-import { Snapshots } from "../snapshots";
-import { parseTags } from "../tag-parser";
-import { emitStageDirections } from "../chub-adapters";
-import { type ObservationSource, assembleObservations } from "../observation";
-import type { ArchitectureName } from "../prose-register";
-import type { RegisterSpec } from "../prose-register";
+import { Body } from "../../body";
+import { Registry } from "../../registry";
+import { Timeline } from "../../timeline";
+import { type TransformationDef, apply, applyTrajectories, getConflicts } from "../../transformation";
+import { Snapshots } from "../../snapshots";
+import { parseTags } from "../../tag-parser";
+import { emitStageDirections } from "../../chub-adapters";
+import { type ObservationSource, assembleObservations } from "../../observation";
+import type { ArchitectureName } from "../../prose-register";
+import type { RegisterSpec } from "../../prose-register";
 import {
   PersistenceStore,
   createChubLayers,
@@ -50,7 +50,7 @@ import {
   mergeResponses,
   shard,
   shardOf,
-} from "../persistence";
+} from "../../persistence";
 
 export interface BodyTransformationBundleInit {
   /** Raw messageState from `InitialData`. */

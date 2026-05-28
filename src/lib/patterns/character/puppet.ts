@@ -27,11 +27,11 @@
  *   function puppetPattern(init: PuppetInit): PuppetBundle
  */
 
-import type { Actor } from "../actor";
-import type { Body } from "../body";
-import { Registry } from "../registry";
-import type { PlaceholderRegistry } from "../registry";
-import type { ActionDef } from "../action";
+import type { Actor } from "../../actor";
+import type { Body } from "../../body";
+import { Registry } from "../../registry";
+import type { PlaceholderRegistry } from "../../registry";
+import type { ActionDef } from "../../action";
 import type { Form } from "./form";
 
 export interface PuppetInit {

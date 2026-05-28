@@ -46,11 +46,11 @@
  *   function spatialPropagationPattern<S, E>(init): SpatialPropagationBundle<S, E>
  */
 
-import { type Refs, type Resolvers, evaluate as evalPredicate } from "../predicate";
-import type { Predicate } from "../predicate";
-import { type RngStream } from "../rng";
-import { Timeline } from "../timeline";
-import { type World } from "../world";
+import { type Refs, type Resolvers, evaluate as evalPredicate } from "../../predicate";
+import type { Predicate } from "../../predicate";
+import { type RngStream } from "../../rng";
+import { Timeline } from "../../timeline";
+import { type World } from "../../world";
 
 export interface WavefrontDef<S = unknown, E = unknown> {
   /** Unique id for this wavefront type (e.g. "fire", "infection", "gossip"). */

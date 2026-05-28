@@ -34,9 +34,9 @@
  *   function physicsPattern(init): PhysicsBundle
  */
 
-import { type AABB, SpatialHash, aabbOverlap, resolvePositional } from "../physics";
-import { Rng } from "../rng";
-import type { ObservationSource } from "../observation";
+import { type AABB, SpatialHash, aabbOverlap, resolvePositional } from "../../physics";
+import { Rng } from "../../rng";
+import type { ObservationSource } from "../../observation";
 
 export interface PhysicsObstacle {
   name: string;

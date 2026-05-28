@@ -31,14 +31,14 @@
  */
 
 import type { Message, StageResponse } from "@chub-ai/stages-ts";
-import { type EffectDef, EffectStore, type EffectMagnitudes } from "../effects";
-import { Registry } from "../registry";
-import { Timeline } from "../timeline";
-import { parseTags } from "../tag-parser";
-import { emitStageDirections } from "../chub-adapters";
-import { type ObservationSource, assembleObservations } from "../observation";
-import type { ArchitectureName } from "../prose-register";
-import type { RegisterSpec } from "../prose-register";
+import { type EffectDef, EffectStore, type EffectMagnitudes } from "../../effects";
+import { Registry } from "../../registry";
+import { Timeline } from "../../timeline";
+import { parseTags } from "../../tag-parser";
+import { emitStageDirections } from "../../chub-adapters";
+import { type ObservationSource, assembleObservations } from "../../observation";
+import type { ArchitectureName } from "../../prose-register";
+import type { RegisterSpec } from "../../prose-register";
 import {
   PersistenceStore,
   createChubLayers,
@@ -46,7 +46,7 @@ import {
   mergeResponses,
   counterShard,
   shardOf,
-} from "../persistence";
+} from "../../persistence";
 
 export interface EffectsBundleInit {
   /** Raw messageState from `InitialData`. */

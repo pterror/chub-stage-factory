@@ -40,10 +40,10 @@ import {
   type Attack,
   type RealtimeEvent,
   type ArenaBounds,
-} from "../combat-realtime";
-import { Rng } from "../rng";
-import { Timeline } from "../timeline";
-import type { ObservationSource } from "../observation";
+} from "../../combat-realtime";
+import { Rng } from "../../rng";
+import { Timeline } from "../../timeline";
+import type { ObservationSource } from "../../observation";
 
 export interface RealtimeCombatInit {
   /** Seed for the `RealtimeWorld` tick counter. */

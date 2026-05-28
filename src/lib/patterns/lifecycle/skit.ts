@@ -40,21 +40,21 @@
  *   function skitPattern(init: SkitBundleInit): SkitBundle
  */
 
-import type { ActorId, ActorPool } from "../actor";
-import type { Actor } from "../actor";
-import type { EffectStore } from "../effects";
-import type { Registry } from "../registry";
-import { type Rng, RngStream } from "../rng";
-import type { Agency, Pace, SceneActionDef, SceneEvent, SceneOutcome } from "../scene";
-import type { ScenePosition, ProseRoles } from "../scene";
-import type { ParseResult, Schema } from "../tag-parser";
-import { Timeline } from "../timeline";
+import type { ActorId, ActorPool } from "../../actor";
+import type { Actor } from "../../actor";
+import type { EffectStore } from "../../effects";
+import type { Registry } from "../../registry";
+import { type Rng, RngStream } from "../../rng";
+import type { Agency, Pace, SceneActionDef, SceneEvent, SceneOutcome } from "../../scene";
+import type { ScenePosition, ProseRoles } from "../../scene";
+import type { ParseResult, Schema } from "../../tag-parser";
+import { Timeline } from "../../timeline";
 import {
   assembleObservations,
   type AssembledObservation,
   type AssembleOptions,
-} from "../observation";
-import { scenePattern, type SceneBundle, type SceneBundleInit } from "./scene";
+} from "../../observation";
+import { scenePattern, type SceneBundle, type SceneBundleInit } from "../world/scene";
 
 export type SkitOutcomeHandler = (outcome: SceneOutcome, bundle: SkitBundle) => void;
 

@@ -42,13 +42,13 @@
  *   function scenePattern(init: SceneBundleInit): SceneBundle
  */
 
-import type { Actor, ActorId, ActorPool } from "../actor";
-import type { Body } from "../body";
-import type { EffectStore } from "../effects";
-import type { Resolvers } from "../predicate";
-import type { Registry } from "../registry";
-import { type Rng, RngStream } from "../rng";
-import { Timeline } from "../timeline";
+import type { Actor, ActorId, ActorPool } from "../../actor";
+import type { Body } from "../../body";
+import type { EffectStore } from "../../effects";
+import type { Resolvers } from "../../predicate";
+import type { Registry } from "../../registry";
+import { type Rng, RngStream } from "../../rng";
+import { Timeline } from "../../timeline";
 import {
   type Agency,
   type Pace,
@@ -60,9 +60,9 @@ import {
   type ScenePosition,
   type ProseRoles,
   SceneConsequenceRegistry,
-} from "../scene";
-import type { ParseResult, Schema } from "../tag-parser";
-import { parseTags } from "../tag-parser";
+} from "../../scene";
+import type { ParseResult, Schema } from "../../tag-parser";
+import { parseTags } from "../../tag-parser";
 
 export interface SceneBundleInit {
   /** Actor source — either an ActorPool or a plain Map. Used to extract

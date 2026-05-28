@@ -28,11 +28,11 @@
  */
 
 import type { Message, StageResponse } from "@chub-ai/stages-ts";
-import { Inventory } from "../inventory";
-import { type ObservationSource, assembleObservations } from "../observation";
-import { emitStageDirections } from "../chub-adapters";
-import type { ArchitectureName } from "../prose-register";
-import type { RegisterSpec } from "../prose-register";
+import { Inventory } from "../../inventory";
+import { type ObservationSource, assembleObservations } from "../../observation";
+import { emitStageDirections } from "../../chub-adapters";
+import type { ArchitectureName } from "../../prose-register";
+import type { RegisterSpec } from "../../prose-register";
 import {
   PersistenceStore,
   createChubLayers,
@@ -40,7 +40,7 @@ import {
   mergeResponses,
   counterShard,
   shardOf,
-} from "../persistence";
+} from "../../persistence";
 
 export interface InventoryBundleInit {
   /** Raw messageState from `InitialData`. */

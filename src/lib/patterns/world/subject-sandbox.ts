@@ -42,12 +42,12 @@
  *   function subjectSandboxPattern<S>(init): SubjectSandboxBundle<S>
  */
 
-import { type Actor, type ActorPool } from "../actor";
-import { type Refs, type Resolvers } from "../predicate";
-import { type RngStream } from "../rng";
-import { Timeline } from "../timeline";
-import { type World, type WorldEvent, type ScopeOptions } from "../world";
-import { type TriggerSet } from "../trigger";
+import { type Actor, type ActorPool } from "../../actor";
+import { type Refs, type Resolvers } from "../../predicate";
+import { type RngStream } from "../../rng";
+import { Timeline } from "../../timeline";
+import { type World, type WorldEvent, type ScopeOptions } from "../../world";
+import { type TriggerSet } from "../../trigger";
 import { type DailyVignetteBundle } from "../character/daily-vignette";
 
 export interface SubjectSandboxInit<S> {

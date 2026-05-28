@@ -30,8 +30,8 @@
  *   function scorePattern<T>(init): ScoreBundle<T>
  */
 
-import { Stat, thresholdTiers } from "../stats";
-import { Timeline } from "../timeline";
+import { Stat, thresholdTiers } from "../../stats";
+import { Timeline } from "../../timeline";
 
 export interface ScoreEvent {
   delta: number;

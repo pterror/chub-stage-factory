@@ -264,3 +264,24 @@ Mock-stage navigation tooling: recommended (R1) as `StageIntrospect` interface
 world-primary orphan verbs.
 
 12 recommendations ordered by leverage in §"Recommendations" of the audit.
+
+---
+
+<!-- Verification gap — 2026-05-29 -->
+
+## 15. Verification checklist: `build:examples` is mandatory
+
+`bun run build` only builds the main app entry (`src/Stage.tsx`). Example stages under
+`examples/*/Stage.tsx` are separate Vite entry points built by `build:examples`. A change
+that touches pattern imports or example files can break `build:examples` while `build` stays
+green — exactly what happened in the patterns chunking commit (`f3ee499`), which moved pattern
+files into subfolders but left stale flat imports in `examples/composite-showcase/Stage.tsx`
+undetected until CI deploy.
+
+**Rule:** Any agent or CI step that verifies a change touching imports, `src/lib/patterns/`,
+or any file under `examples/` must run `bun run build:examples` in addition to `bun run build`.
+`build` alone is not sufficient.
+
+**Also fixed in this pass:** `scripts/build-example.mjs` used `npx vite` which is unavailable
+on NixOS; changed to `bunx vite` so `build:examples` runs locally without a separate Node/npm
+install.

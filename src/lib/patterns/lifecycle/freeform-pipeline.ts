@@ -40,8 +40,8 @@
  */
 
 import type { GenerationService } from "@chub-ai/stages-ts";
-import { generate, type SchemaParser } from "../generate";
-import { parseIntent, type Intent, type ParseIntentOptions } from "../intent";
+import { generate, type SchemaParser } from "../../generate";
+import { parseIntent, type Intent, type ParseIntentOptions } from "../../intent";
 import type { RenderStub } from "./render-trigger";
 
 export type SandboxPolicy = "strict" | "coerce";

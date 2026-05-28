@@ -32,7 +32,7 @@ rmSync(distDir, { recursive: true, force: true });
 
 console.log(`[build-example] ${name}: vite build -> ${distDir}`);
 try {
-  execSync(`npx vite build --outDir dist/${name}`, {
+  execSync(`bunx vite build --outDir dist/${name}`, {
     cwd: repo,
     stdio: "inherit",
     env: {

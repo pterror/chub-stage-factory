@@ -31,16 +31,16 @@
  */
 
 import type { Message, StageResponse } from "@chub-ai/stages-ts";
-import { type Combatant, type World, runRound, type CombatEvent } from "../combat-turn";
-import { EffectStore, type EffectDef } from "../effects";
-import { Registry } from "../registry";
-import { Timeline } from "../timeline";
-import { Rng } from "../rng";
-import { parseTags } from "../tag-parser";
-import { emitStageDirections } from "../chub-adapters";
-import { type ObservationSource, assembleObservations } from "../observation";
-import type { ArchitectureName } from "../prose-register";
-import type { RegisterSpec } from "../prose-register";
+import { type Combatant, type World, runRound, type CombatEvent } from "../../combat-turn";
+import { EffectStore, type EffectDef } from "../../effects";
+import { Registry } from "../../registry";
+import { Timeline } from "../../timeline";
+import { Rng } from "../../rng";
+import { parseTags } from "../../tag-parser";
+import { emitStageDirections } from "../../chub-adapters";
+import { type ObservationSource, assembleObservations } from "../../observation";
+import type { ArchitectureName } from "../../prose-register";
+import type { RegisterSpec } from "../../prose-register";
 import {
   PersistenceStore,
   createChubLayers,
@@ -49,7 +49,7 @@ import {
   forbidBranching,
   mergeResponses,
   shard,
-} from "../persistence";
+} from "../../persistence";
 
 /** Serializable form of combatant state used by the persistence layer. */
 export interface CombatantSnap {

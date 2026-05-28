@@ -40,11 +40,11 @@
  *   function cyberSlotsPattern(init): CyberSlotsBundle
  */
 
-import { Body } from "../body";
-import { apply as applyTfFn, type TransformationDef } from "../transformation";
-import { type EquipmentDef, Loadout } from "../equipment";
-import type { Registry } from "../registry";
-import type { ObservationSource } from "../observation";
+import { Body } from "../../body";
+import { apply as applyTfFn, type TransformationDef } from "../../transformation";
+import { type EquipmentDef, Loadout } from "../../equipment";
+import type { Registry } from "../../registry";
+import type { ObservationSource } from "../../observation";
 
 export interface CyberSlotsInit {
   /** Initial body slot tags: `{ head: ["flesh-only"], torso: ["flesh-only"] }`. */

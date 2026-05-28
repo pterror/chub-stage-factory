@@ -34,8 +34,8 @@
  *   function factionPattern<S, A>(init): FactionBundle<S, A>
  */
 
-import { Stat, thresholdTiers } from "../stats";
-import { evaluate } from "../predicate";
+import { Stat, thresholdTiers } from "../../stats";
+import { evaluate } from "../../predicate";
 
 export interface FactionDef {
   id: string;
