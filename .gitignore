@@ -26,6 +26,7 @@ types/
 .idea/
 *.zip
 dist/
+dist-headless/
 creation.json
 *.trash
 *.tgz
@@ -33,3 +34,8 @@ creation.json
 # Nix / direnv
 .direnv/
 .envrc.local
+
+# Normalize
+.normalize/*
+!.normalize/config.toml
+!.normalize/memory/
