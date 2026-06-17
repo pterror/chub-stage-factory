@@ -48,7 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "/home/me/git/pterror/chub-stage-factory/tooling/claude-hooks/post-history.sh"
+            "command": "${CLAUDE_PROJECT_DIR}/tooling/claude-hooks/inject-orchestrator-rules.sh"
           }
         ]
       },
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PROJECT_DIR}/tooling/claude-hooks/inject-orchestrator-rules.sh"
+            "command": "${CLAUDE_PROJECT_DIR}/tooling/claude-hooks/post-history.sh"
           }
         ]
       }
