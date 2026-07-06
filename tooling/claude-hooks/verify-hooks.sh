@@ -115,30 +115,24 @@ for h in $HOOKS; do
     static_check "$HOOKS_DIR/$h"
 done
 
-# UserPromptSubmit hooks: main-session payload injects context, subagent
-# payload (top-level agent_id) stays silent. Both are allow-shaped.
-run_case inject-orchestrator-rules.sh allow main-session \
-    '{"session_id":"verify-smoke","prompt":"verify smoke"}'
+# Required per-hook smoke fixture (lib/smoke/<hook>.json): a benign payload
+# each hook's own contract should ALLOW cleanly.
+run_fixture inject-orchestrator-rules.sh
+run_fixture post-history.sh
+run_fixture block-blocking-bash.sh
+run_fixture block-mainsession-exploration.sh
+
+# Extra inline cases: bonus regression coverage beyond the required fixture,
+# exercising deny paths and the subagent bypass. A deliberate, well-formed
+# deny here is success, not failure.
 run_case inject-orchestrator-rules.sh allow subagent \
     '{"session_id":"verify-smoke","agent_id":"verify-smoke","prompt":"verify smoke"}'
-run_case post-history.sh allow main-session \
-    '{"session_id":"verify-smoke","prompt":"verify smoke"}'
-
-# PreToolUse (Bash matcher): snapshot command passes, follow-mode denies.
-run_case block-blocking-bash.sh allow git-status \
-    '{"tool_name":"Bash","tool_input":{"command":"git status"}}'
 run_case block-blocking-bash.sh deny tail-follow \
     '{"tool_name":"Bash","tool_input":{"command":"tail -f /var/log/syslog"}}'
 
 # PreToolUse (all tools): each case exercises a distinct lib/ helper.
-#   agent-cheap-model  → lib/extract-field.awk   (the 2026-07 regression)
-#   bash-git-status    → lib/extract-command.awk + lib/tokenize-bash.awk
 #   subagent-bypass    → agent_id skeleton scan
 #   read-mainsession   → deny path (deliberate deny is success, not failure)
-run_case block-mainsession-exploration.sh allow agent-cheap-model \
-    '{"tool_name":"Agent","tool_input":{"model":"haiku","prompt":"verify smoke"}}'
-run_case block-mainsession-exploration.sh allow bash-git-status \
-    '{"tool_name":"Bash","tool_input":{"command":"git status"}}'
 run_case block-mainsession-exploration.sh allow subagent-bypass \
     '{"tool_name":"Read","agent_id":"verify-smoke","tool_input":{"file_path":"/x"}}'
 run_case block-mainsession-exploration.sh deny read-mainsession \
