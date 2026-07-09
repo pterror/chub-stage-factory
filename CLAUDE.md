@@ -217,6 +217,10 @@ Curated for pattern coverage. Read the one closest to what you're building befor
   ONLY remaining step. Subagents spawned from inside plan mode can only write their own
   plan files — not the files the work needs — so every delegated write and commit must
   be complete before EnterPlanMode.
+- Generation anchors. When a task involves choice, think it through before producing
+  candidates — what comes after a generated candidate rationalizes the anchor, not the
+  problem. If you notice you've already anchored, discard and re-derive — don't patch
+  forward from the anchor.
 - Commit completed work in the same turn it finishes. Uncommitted work is lost work.
 
 ## Disposition
