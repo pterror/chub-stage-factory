@@ -5,9 +5,12 @@ import { ChatDisplayMessage, ChatUI } from "./ChatUI.tsx";
 import { ConfigPanel } from "./ConfigPanel.tsx";
 import "./runner.css";
 
+export type StagePosition = "ADJACENT" | "NONE" | "COVER" | "FULLSCREEN";
+
 export interface StageRunnerProps {
   stageFactory: (data: any) => StageBase<any, any, any, any>;
   initData: any;
+  position?: StagePosition;
 }
 
 interface ChatCompletionMessage {
@@ -79,11 +82,18 @@ function toChatCompletionMessages(nodes: MessageNode[]): ChatCompletionMessage[]
     .map((n) => ({ role: n.role, content: n.content }));
 }
 
-export function StageRunner({ stageFactory, initData }: StageRunnerProps) {
+export function StageRunner({
+  stageFactory,
+  initData,
+  position = "ADJACENT",
+}: StageRunnerProps) {
   const [stage] = useState(() => stageFactory(initData));
   const treeRef = useRef(new MessageTree());
   const [, setTick] = useState(0);
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  // Only FULLSCREEN/COVER hide the chat behind a toggle; ADJACENT/NONE
+  // never need this state.
+  const [chatOpen, setChatOpen] = useState(false);
 
   const [ready, setReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -278,8 +288,11 @@ export function StageRunner({ stageFactory, initData }: StageRunnerProps) {
       };
     });
 
+  const layoutClass = `runner-layout-${position.toLowerCase()}`;
+  const overlayToggleable = position === "FULLSCREEN" || position === "COVER";
+
   return (
-    <div className="runner-root">
+    <div className={`runner-root ${layoutClass}`}>
       <ConfigPanel />
       <ChatUI
         stage={stage}
@@ -290,7 +303,18 @@ export function StageRunner({ stageFactory, initData }: StageRunnerProps) {
         loading={loading}
         error={error}
         onStageUpdate={refresh}
+        position={position}
+        chatOpen={chatOpen}
       />
+      {overlayToggleable && (
+        <button
+          type="button"
+          className="chat-toggle-btn"
+          onClick={() => setChatOpen((open) => !open)}
+        >
+          {chatOpen ? "✕" : "💬"}
+        </button>
+      )}
     </div>
   );
 }

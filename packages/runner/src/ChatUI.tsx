@@ -19,6 +19,10 @@ export interface ChatUIProps {
   loading: boolean;
   error: string | null;
   onStageUpdate: () => void;
+  position?: "ADJACENT" | "NONE" | "COVER" | "FULLSCREEN";
+  // For FULLSCREEN/COVER: whether the overlaid chat is currently shown.
+  // Ignored for ADJACENT/NONE, which never hide the chat panel.
+  chatOpen?: boolean;
 }
 
 export function ChatUI({
@@ -29,6 +33,8 @@ export function ChatUI({
   onRegenerate,
   loading,
   error,
+  position = "ADJACENT",
+  chatOpen = false,
 }: ChatUIProps) {
   const [input, setInput] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
@@ -57,12 +63,20 @@ export function ChatUI({
   const lastMessage = messages[messages.length - 1];
   const canRegenerate = lastMessage?.role === "assistant" && !loading;
 
+  // FULLSCREEN overlays the whole chat panel (history + input) on toggle.
+  // COVER always shows the input bar but overlays just the history on toggle.
+  const chatPanelClass =
+    position === "FULLSCREEN"
+      ? `chat-panel chat-panel-overlay ${chatOpen ? "chat-panel-open" : ""}`
+      : "chat-panel";
+  const historyHidden = position === "COVER" && !chatOpen;
+
   return (
     <div className="runner-body">
       <div className="stage-panel">{stage.render()}</div>
-      <div className="chat-panel">
+      <div className={chatPanelClass}>
         {error && <div className="error-banner">{error}</div>}
-        <div className="message-list" ref={listRef}>
+        <div className="message-list" ref={listRef} hidden={historyHidden}>
           {messages.length === 0 && (
             <div className="empty-hint">Send a message to start the chat.</div>
           )}

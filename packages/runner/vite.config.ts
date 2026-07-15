@@ -17,6 +17,7 @@ export default defineConfig(({ mode }) => {
     ? resolve(env.STAGE_PATH)
     : resolve(__dirname, "../..");
   const stageSrc = resolve(stageRoot, "src");
+  const stagePublic = resolve(stageRoot, "public");
   const stageNodeModules = resolve(stageRoot, "node_modules");
 
   return {
@@ -25,6 +26,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@stage": stageSrc,
+        "@stage-public": stagePublic,
       },
       // Let Vite fall back to the external stage's own node_modules so its
       // dependencies resolve even when they're not hoisted into this
