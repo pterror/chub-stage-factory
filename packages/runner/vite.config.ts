@@ -20,6 +20,7 @@ export default defineConfig(({ mode }) => {
   const stageSrc = resolve(stageRoot, "src");
   const stagePublic = resolve(stageRoot, "public");
   const stageNodeModules = resolve(stageRoot, "node_modules");
+  const runnerPort = Number(env.RUNNER_PORT ?? 3001);
 
   return {
     root: __dirname,
@@ -48,7 +49,7 @@ export default defineConfig(({ mode }) => {
       },
       proxy: {
         "/api": {
-          target: "http://localhost:3001",
+          target: `http://localhost:${runnerPort}`,
           changeOrigin: true,
         },
         "/chub-proxy": {

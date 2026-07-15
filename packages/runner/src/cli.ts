@@ -389,6 +389,52 @@ async function findFreePort(start: number): Promise<number> {
   return port;
 }
 
+async function killProcessOnPort(port: number): Promise<boolean> {
+  const lsofPath = Bun.which("lsof");
+  if (!lsofPath) return false;
+
+  const proc = Bun.spawn([lsofPath, "-ti", `tcp:${port}`], {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const output = await new Response(proc.stdout).text();
+  await proc.exited;
+
+  const pids = output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (pids.length === 0) return false;
+
+  console.log(`[cli] killing stale process on port ${port}`);
+  for (const pid of pids) {
+    try {
+      process.kill(Number(pid), "SIGTERM");
+    } catch {}
+  }
+
+  for (let i = 0; i < 20; i++) {
+    if (await isPortFree(port)) return true;
+    await Bun.sleep(100);
+  }
+  return false;
+}
+
+async function ensureRunnerPort(preferred: number): Promise<number> {
+  if (await isPortFree(preferred)) {
+    return preferred;
+  }
+  const killed = await killProcessOnPort(preferred);
+  if (killed && (await isPortFree(preferred))) {
+    return preferred;
+  }
+  const fallbackPort = await findFreePort(preferred + 1);
+  console.log(
+    `[cli] port ${preferred} still in use, using ${fallbackPort} instead`,
+  );
+  return fallbackPort;
+}
+
 function requireBinary(name: string): string {
   const path = Bun.which(name);
   if (!path) {
@@ -461,6 +507,10 @@ async function main() {
     env.CHUB_PROXY = `socks5://localhost:${proxyHandle.port}`;
     console.log(`[cli] CHUB_PROXY=${env.CHUB_PROXY}`);
   }
+
+  const runnerPort = await ensureRunnerPort(Number(env.RUNNER_PORT ?? 3001));
+  env.RUNNER_PORT = String(runnerPort);
+  console.log(`[cli] RUNNER_PORT=${runnerPort}`);
 
   const children = [
     Bun.spawn(["bun", "run", "dev:server"], {

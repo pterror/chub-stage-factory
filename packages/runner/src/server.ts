@@ -65,20 +65,26 @@ function createChubProxyHandler(prefix: string, target: string) {
       ? new ProxyAgent({ getProxyForUrl: () => chubProxy })
       : undefined;
 
-    const upstreamResponse = await fetch(upstreamUrl, {
-      method: c.req.method,
-      headers,
-      body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
-      // @ts-expect-error duplex is required for streaming request bodies in undici
-      duplex: ["GET", "HEAD"].includes(c.req.method) ? undefined : "half",
-      ...(agent ? { agent } : {}),
-    });
+    try {
+      const upstreamResponse = await fetch(upstreamUrl, {
+        method: c.req.method,
+        headers,
+        body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
+        // @ts-expect-error duplex is required for streaming request bodies in undici
+        duplex: ["GET", "HEAD"].includes(c.req.method) ? undefined : "half",
+        ...(agent ? { agent } : {}),
+      });
 
-    return new Response(upstreamResponse.body, {
-      status: upstreamResponse.status,
-      statusText: upstreamResponse.statusText,
-      headers: upstreamResponse.headers,
-    });
+      return new Response(upstreamResponse.body, {
+        status: upstreamResponse.status,
+        statusText: upstreamResponse.statusText,
+        headers: upstreamResponse.headers,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown proxy error";
+      console.error(`[chub-proxy] ${prefix} -> ${upstreamUrl} failed: ${message}`);
+      return c.json({ error: message }, 502);
+    }
   };
 }
 
