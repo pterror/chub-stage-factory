@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { streamText } from "ai";
 import {
   DEFAULT_MODEL,
@@ -42,7 +42,42 @@ function configView() {
   };
 }
 
+const CHUB_PROXY_ROUTES: Array<{ path: string; target: string }> = [
+  { path: "/chub-proxy", target: "https://inference.chub.ai" },
+  { path: "/chub-api-proxy", target: "https://api.chub.ai" },
+];
+
+function createChubProxyHandler(prefix: string, target: string) {
+  return async (c: Context) => {
+    const url = new URL(c.req.url);
+    const upstreamUrl = `${target}${url.pathname.slice(prefix.length)}${url.search}`;
+
+    const headers = new Headers(c.req.raw.headers);
+    headers.set("Referer", "https://chub.ai/");
+    headers.set("Origin", "https://chub.ai");
+    headers.delete("host");
+
+    const upstreamResponse = await fetch(upstreamUrl, {
+      method: c.req.method,
+      headers,
+      body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
+      // @ts-expect-error duplex is required for streaming request bodies in undici
+      duplex: ["GET", "HEAD"].includes(c.req.method) ? undefined : "half",
+    });
+
+    return new Response(upstreamResponse.body, {
+      status: upstreamResponse.status,
+      statusText: upstreamResponse.statusText,
+      headers: upstreamResponse.headers,
+    });
+  };
+}
+
 export const app = new Hono();
+
+for (const { path, target } of CHUB_PROXY_ROUTES) {
+  app.all(`${path}/*`, createChubProxyHandler(path, target));
+}
 
 app.get("/api/config", (c) => {
   return c.json(configView());

@@ -50,6 +50,24 @@ export default defineConfig(({ mode }) => {
           target: "http://localhost:3001",
           changeOrigin: true,
         },
+        "/chub-proxy": {
+          target: "https://inference.chub.ai",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/chub-proxy/, ""),
+          headers: {
+            Referer: "https://chub.ai/",
+            Origin: "https://chub.ai",
+          },
+        },
+        "/chub-api-proxy": {
+          target: "https://api.chub.ai",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/chub-api-proxy/, ""),
+          headers: {
+            Referer: "https://chub.ai/",
+            Origin: "https://chub.ai",
+          },
+        },
       },
     },
     build: {

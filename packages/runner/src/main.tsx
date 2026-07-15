@@ -1,6 +1,7 @@
 import ReactDOM from "react-dom/client";
 import { parse as parseYaml } from "yaml";
 import { DEFAULT_INITIAL } from "@chub-ai/stages-ts";
+import { patchFetch } from "./fetch-patch.ts";
 import { StageRunner, type StagePosition } from "./StageRunner.tsx";
 // "@stage" resolves to STAGE_PATH/src when set (see vite.config.ts), or
 // this factory's own ../../src by default.
@@ -8,6 +9,8 @@ import { Stage } from "@stage/Stage.tsx";
 // "@stage-public" resolves to STAGE_PATH/public (see vite.config.ts).
 import chubMetaRaw from "@stage-public/chub_meta.yaml?raw";
 import "./runner.css";
+
+patchFetch();
 
 const VALID_POSITIONS: StagePosition[] = ["ADJACENT", "NONE", "COVER", "FULLSCREEN"];
 
