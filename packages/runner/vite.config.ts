@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
+import { ProxyAgent } from "proxy-agent";
 
 // Standalone runner dev/build config. Lives in its own workspace package so
 // it can pull in server-side deps (hono, ai-sdk) without polluting the Chub
@@ -58,6 +59,9 @@ export default defineConfig(({ mode }) => {
             Referer: "https://chub.ai/",
             Origin: "https://chub.ai",
           },
+          agent: env.CHUB_PROXY
+            ? new ProxyAgent({ getProxyForUrl: () => env.CHUB_PROXY! })
+            : undefined,
         },
         "/chub-api-proxy": {
           target: "https://api.chub.ai",
@@ -67,6 +71,9 @@ export default defineConfig(({ mode }) => {
             Referer: "https://chub.ai/",
             Origin: "https://chub.ai",
           },
+          agent: env.CHUB_PROXY
+            ? new ProxyAgent({ getProxyForUrl: () => env.CHUB_PROXY! })
+            : undefined,
         },
       },
     },

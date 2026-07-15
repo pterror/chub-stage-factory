@@ -57,12 +57,15 @@ function createChubProxyHandler(prefix: string, target: string) {
     headers.set("Origin", "https://chub.ai");
     headers.delete("host");
 
+    const chubProxy = process.env.CHUB_PROXY;
+
     const upstreamResponse = await fetch(upstreamUrl, {
       method: c.req.method,
       headers,
       body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
       // @ts-expect-error duplex is required for streaming request bodies in undici
       duplex: ["GET", "HEAD"].includes(c.req.method) ? undefined : "half",
+      ...(chubProxy ? { proxy: chubProxy } : {}),
     });
 
     return new Response(upstreamResponse.body, {
