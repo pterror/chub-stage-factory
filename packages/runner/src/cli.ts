@@ -13,9 +13,13 @@
 //   bun run runner path:/home/me/git/foo                     # explicit local path
 //   bun run runner npm:@lord-raven/statosphere                # npm package (not yet implemented)
 //   bun run runner --refresh Victorp1811/Space-ship-Simulator  # re-pull cached
+//   bun run runner --netns chub-vpn Victorp1811/Space-ship-Simulator  # start SOCKS proxy bridge over netns
 //   bun run runner                                      # uses STAGE_PATH env or factory's own stage
+//
+// RUNNER_NETNS env var is equivalent to --netns.
 
 import { existsSync } from "node:fs";
+import { createServer } from "node:net";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,17 +33,25 @@ interface RemoteRef {
   label: string;
 }
 
-function parseArgs(argv: string[]): { refresh: boolean; specifier?: string } {
+function parseArgs(
+  argv: string[],
+): { refresh: boolean; specifier?: string; netns?: string } {
   let refresh = false;
   let specifier: string | undefined;
-  for (const arg of argv) {
+  let netns = process.env.RUNNER_NETNS || undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
     if (arg === "--refresh") {
       refresh = true;
+    } else if (arg === "--netns") {
+      netns = argv[++i];
+    } else if (arg.startsWith("--netns=")) {
+      netns = arg.slice("--netns=".length);
     } else if (!specifier) {
       specifier = arg;
     }
   }
-  return { refresh, specifier };
+  return { refresh, specifier, netns };
 }
 
 function expandHome(path: string): string {
@@ -353,8 +365,79 @@ async function resolveStagePath(
   );
 }
 
+interface ProxyHandle {
+  port: number;
+  processes: Bun.Subprocess[];
+}
+
+function isPortFree(port: number): Promise<boolean> {
+  return new Promise((resolvePromise) => {
+    const server = createServer();
+    server.once("error", () => resolvePromise(false));
+    server.once("listening", () => {
+      server.close(() => resolvePromise(true));
+    });
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function findFreePort(start: number): Promise<number> {
+  let port = start;
+  while (!(await isPortFree(port))) {
+    port++;
+  }
+  return port;
+}
+
+function requireBinary(name: string): string {
+  const path = Bun.which(name);
+  if (!path) {
+    console.error(
+      `[cli] "${name}" not found on PATH. Run inside "nix develop" (it provides microsocks and socat via the devShell).`,
+    );
+    process.exit(1);
+  }
+  return path;
+}
+
+async function startNetnsProxy(netns: string): Promise<ProxyHandle> {
+  const microsocksPath = requireBinary("microsocks");
+  const socatPath = requireBinary("socat");
+  const port = await findFreePort(1080);
+
+  console.log(
+    `[cli] starting SOCKS proxy bridge for netns "${netns}" on port ${port}`,
+  );
+
+  const microsocksProc = Bun.spawn(
+    ["sudo", "ip", "netns", "exec", netns, microsocksPath, "-p", String(port)],
+    { stdout: "inherit", stderr: "inherit", stdin: "inherit" },
+  );
+
+  const socatProc = Bun.spawn(
+    [
+      "sudo",
+      socatPath,
+      `TCP-LISTEN:${port},fork,reuseaddr`,
+      `EXEC:ip netns exec ${netns} ${socatPath} STDIO TCP:127.0.0.1:${port}`,
+    ],
+    { stdout: "inherit", stderr: "inherit", stdin: "inherit" },
+  );
+
+  await Bun.sleep(500);
+
+  return { port, processes: [microsocksProc, socatProc] };
+}
+
+async function stopNetnsProxy(handle: ProxyHandle): Promise<void> {
+  for (const proc of handle.processes) {
+    if (proc.exitCode !== null) continue;
+    await run(["sudo", "kill", String(proc.pid)], runnerDir).catch(() => {});
+  }
+}
+
 async function main() {
-  const { refresh, specifier } = parseArgs(process.argv.slice(2));
+  const { refresh, specifier, netns } = parseArgs(process.argv.slice(2));
 
   let stagePath: string | undefined;
   try {
@@ -370,6 +453,13 @@ async function main() {
     console.log(`[cli] STAGE_PATH=${stagePath}`);
   } else {
     console.log(`[cli] running factory's own stage (no STAGE_PATH set)`);
+  }
+
+  let proxyHandle: ProxyHandle | undefined;
+  if (netns) {
+    proxyHandle = await startNetnsProxy(netns);
+    env.CHUB_PROXY = `socks5://localhost:${proxyHandle.port}`;
+    console.log(`[cli] CHUB_PROXY=${env.CHUB_PROXY}`);
   }
 
   const children = [
@@ -390,21 +480,24 @@ async function main() {
   ];
 
   let shuttingDown = false;
-  const shutdown = () => {
+  const shutdown = async () => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log("\n[cli] shutting down...");
     for (const child of children) {
       child.kill();
     }
+    if (proxyHandle) {
+      await stopNetnsProxy(proxyHandle);
+    }
     process.exit(0);
   };
 
-  process.on("SIGINT", shutdown);
-  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", () => void shutdown());
+  process.on("SIGTERM", () => void shutdown());
 
   await Promise.race(children.map((child) => child.exited));
-  shutdown();
+  await shutdown();
 }
 
 main();
