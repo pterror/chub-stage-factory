@@ -1,5 +1,6 @@
 import { Hono, type Context } from "hono";
 import { streamText } from "ai";
+import { ProxyAgent } from "proxy-agent";
 import {
   DEFAULT_MODEL,
   getApiKeyEnvVar,
@@ -59,13 +60,18 @@ function createChubProxyHandler(prefix: string, target: string) {
 
     const chubProxy = process.env.CHUB_PROXY;
 
+    // Use ProxyAgent for SOCKS5 support (Node.js fetch doesn't natively support SOCKS5)
+    const agent = chubProxy
+      ? new ProxyAgent({ getProxyForUrl: () => chubProxy })
+      : undefined;
+
     const upstreamResponse = await fetch(upstreamUrl, {
       method: c.req.method,
       headers,
       body: ["GET", "HEAD"].includes(c.req.method) ? undefined : c.req.raw.body,
       // @ts-expect-error duplex is required for streaming request bodies in undici
       duplex: ["GET", "HEAD"].includes(c.req.method) ? undefined : "half",
-      ...(chubProxy ? { proxy: chubProxy } : {}),
+      ...(agent ? { agent } : {}),
     });
 
     return new Response(upstreamResponse.body, {
