@@ -9,6 +9,7 @@
 //   bun run runner sourcehut:~user/stage                     # sourcehut protocol
 //   bun run runner git+https://my.server/repo.git            # arbitrary git host
 //   bun run runner git+ssh://git@host/repo                   # arbitrary git host over ssh
+//   bun run runner my.gitea.instance/user/repo               # bare domain (dotted first segment)
 //   bun run runner path:/home/me/git/foo                     # explicit local path
 //   bun run runner npm:@lord-raven/statosphere                # npm package (not yet implemented)
 //   bun run runner --refresh Victorp1811/Space-ship-Simulator  # re-pull cached
@@ -101,6 +102,23 @@ function gitPlusRef(strippedUrl: string): RemoteRef {
   };
 }
 
+const KNOWN_FORGES: Record<string, string> = {
+  "github.com": "github",
+  "gitlab.com": "gitlab",
+  "git.sr.ht": "sourcehut",
+};
+
+function bareDomainRef(specifier: string): RemoteRef {
+  const parts = specifier.split("/").filter(Boolean);
+  const domain = parts[0];
+  const pathParts = parts.slice(1);
+  return {
+    url: `https://${domain}/${pathParts.join("/")}.git`,
+    cacheDir: join(getCacheDir(), "git", domain, ...pathParts),
+    label: specifier,
+  };
+}
+
 function parseGitHubUrl(specifier: string): RemoteRef | undefined {
   const match = specifier.match(
     /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?\/?$/,
@@ -151,6 +169,27 @@ function run(
   });
 }
 
+async function cloneWithFallback(ref: RemoteRef, stageDir: string): Promise<void> {
+  console.log(`[cli] cloning ${ref.url} into ${stageDir}`);
+  let { code } = await run(
+    ["git", "clone", "--depth", "1", ref.url, stageDir],
+    runnerDir,
+  );
+
+  if (code !== 0 && ref.url.startsWith("https://")) {
+    const httpUrl = `http://${ref.url.slice("https://".length)}`;
+    console.warn("warn: HTTPS clone failed, falling back to HTTP (unencrypted)");
+    ({ code } = await run(
+      ["git", "clone", "--depth", "1", httpUrl, stageDir],
+      runnerDir,
+    ));
+  }
+
+  if (code !== 0) {
+    throw new Error(`git clone failed with exit code ${code}`);
+  }
+}
+
 async function ensureRemoteStage(
   ref: RemoteRef,
   refresh: boolean,
@@ -159,14 +198,7 @@ async function ensureRemoteStage(
   const exists = existsSync(stageDir);
 
   if (!exists) {
-    console.log(`[cli] cloning ${ref.url} into ${stageDir}`);
-    const { code } = await run(
-      ["git", "clone", "--depth", "1", ref.url, stageDir],
-      runnerDir,
-    );
-    if (code !== 0) {
-      throw new Error(`git clone failed with exit code ${code}`);
-    }
+    await cloneWithFallback(ref, stageDir);
   } else if (refresh) {
     console.log(`[cli] pulling latest for ${ref.label}`);
     const { code } = await run(["git", "pull"], stageDir);
@@ -216,6 +248,65 @@ async function ensureDepsInstalled(
   }
 }
 
+async function resolveByProtocol(
+  protocol: string,
+  rest: string,
+  refresh: boolean,
+  specifier: string,
+): Promise<string> {
+  switch (protocol) {
+    case "github": {
+      const ownerRepo = splitOwnerRepo(rest);
+      if (!ownerRepo) {
+        throw new Error(`invalid github: specifier: ${specifier}`);
+      }
+      return ensureRemoteStage(githubRef(...ownerRepo), refresh);
+    }
+    case "gitlab": {
+      const ownerRepo = splitOwnerRepo(rest);
+      if (!ownerRepo) {
+        throw new Error(`invalid gitlab: specifier: ${specifier}`);
+      }
+      return ensureRemoteStage(gitlabRef(...ownerRepo), refresh);
+    }
+    case "sourcehut": {
+      const match = rest.match(/^~([^/]+)\/(.+)$/);
+      if (!match) {
+        throw new Error(
+          `invalid sourcehut: specifier: ${specifier} (expected sourcehut:~user/repo)`,
+        );
+      }
+      const [, user, repo] = match;
+      return ensureRemoteStage(sourcehutRef(user, repo), refresh);
+    }
+    case "git+https":
+    case "git+ssh": {
+      const strippedUrl = specifier.slice("git+".length);
+      return ensureRemoteStage(gitPlusRef(strippedUrl), refresh);
+    }
+    case "path": {
+      return ensureLocalStage(rest);
+    }
+    case "npm": {
+      return ensureNpmStage(rest);
+    }
+    case "http":
+    case "https": {
+      const githubUrlRef = parseGitHubUrl(specifier);
+      if (githubUrlRef) {
+        return ensureRemoteStage(githubUrlRef, refresh);
+      }
+      throw new Error(
+        `unsupported ${protocol}: URL: ${specifier} (only github.com URLs are supported directly; use git+${protocol}: for other hosts)`,
+      );
+    }
+    default:
+      throw new Error(
+        `unknown protocol "${protocol}:" in specifier: ${specifier}`,
+      );
+  }
+}
+
 async function resolveStagePath(
   specifier: string | undefined,
   refresh: boolean,
@@ -233,59 +324,23 @@ async function resolveStagePath(
 
   const protocolSpecifier = parseProtocolSpecifier(specifier);
   if (protocolSpecifier) {
-    const { protocol, rest } = protocolSpecifier;
+    return resolveByProtocol(
+      protocolSpecifier.protocol,
+      protocolSpecifier.rest,
+      refresh,
+      specifier,
+    );
+  }
 
-    switch (protocol) {
-      case "github": {
-        const ownerRepo = splitOwnerRepo(rest);
-        if (!ownerRepo) {
-          throw new Error(`invalid github: specifier: ${specifier}`);
-        }
-        return ensureRemoteStage(githubRef(...ownerRepo), refresh);
-      }
-      case "gitlab": {
-        const ownerRepo = splitOwnerRepo(rest);
-        if (!ownerRepo) {
-          throw new Error(`invalid gitlab: specifier: ${specifier}`);
-        }
-        return ensureRemoteStage(gitlabRef(...ownerRepo), refresh);
-      }
-      case "sourcehut": {
-        const match = rest.match(/^~([^/]+)\/(.+)$/);
-        if (!match) {
-          throw new Error(
-            `invalid sourcehut: specifier: ${specifier} (expected sourcehut:~user/repo)`,
-          );
-        }
-        const [, user, repo] = match;
-        return ensureRemoteStage(sourcehutRef(user, repo), refresh);
-      }
-      case "git+https":
-      case "git+ssh": {
-        const strippedUrl = specifier.slice("git+".length);
-        return ensureRemoteStage(gitPlusRef(strippedUrl), refresh);
-      }
-      case "path": {
-        return ensureLocalStage(rest);
-      }
-      case "npm": {
-        return ensureNpmStage(rest);
-      }
-      case "http":
-      case "https": {
-        const githubUrlRef = parseGitHubUrl(specifier);
-        if (githubUrlRef) {
-          return ensureRemoteStage(githubUrlRef, refresh);
-        }
-        throw new Error(
-          `unsupported ${protocol}: URL: ${specifier} (only github.com URLs are supported directly; use git+${protocol}: for other hosts)`,
-        );
-      }
-      default:
-        throw new Error(
-          `unknown protocol "${protocol}:" in specifier: ${specifier}`,
-        );
+  const slashIdx = specifier.indexOf("/");
+  const firstSegment = slashIdx === -1 ? specifier : specifier.slice(0, slashIdx);
+  if (firstSegment.includes(".")) {
+    const knownProtocol = KNOWN_FORGES[firstSegment];
+    const rest = slashIdx === -1 ? "" : specifier.slice(slashIdx + 1);
+    if (knownProtocol) {
+      return resolveByProtocol(knownProtocol, rest, refresh, specifier);
     }
+    return ensureRemoteStage(bareDomainRef(specifier), refresh);
   }
 
   const shorthandRef = parseGitHubShorthand(specifier);
