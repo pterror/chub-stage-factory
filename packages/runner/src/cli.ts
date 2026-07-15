@@ -465,7 +465,7 @@ async function startNetnsProxy(netns: string): Promise<ProxyHandle> {
       "sudo",
       socatPath,
       `TCP-LISTEN:${port},fork,reuseaddr`,
-      `EXEC:ip netns exec ${netns} ${socatPath} STDIO TCP:127.0.0.1:${port}`,
+      `SYSTEM:ip netns exec ${netns} ${socatPath} STDIO TCP:127.0.0.1:${port}`,
     ],
     { stdout: "inherit", stderr: "inherit", stdin: "inherit" },
   );
