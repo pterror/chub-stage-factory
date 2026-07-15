@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 
 interface RunnerConfigView {
-  provider: string;
-  model: string;
+  defaultModel: string;
+  providerName: string;
+  envVar: string | null;
   hasApiKey: boolean;
 }
 
 export function ConfigPanel() {
   const [collapsed, setCollapsed] = useState(true);
   const [config, setConfig] = useState<RunnerConfigView | null>(null);
-  const [provider, setProvider] = useState("openai");
   const [model, setModel] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -20,8 +20,7 @@ export function ConfigPanel() {
       .then((r) => r.json())
       .then((data: RunnerConfigView) => {
         setConfig(data);
-        setProvider(data.provider);
-        setModel(data.model);
+        setModel(data.defaultModel);
       })
       .catch(() => setStatus("Failed to load config."));
   }, []);
@@ -30,7 +29,7 @@ export function ConfigPanel() {
     setSaving(true);
     setStatus(null);
     try {
-      const body: Record<string, string> = { provider, model };
+      const body: Record<string, string> = { model };
       if (apiKey) {
         body.apiKey = apiKey;
       }
@@ -60,37 +59,41 @@ export function ConfigPanel() {
         <span>{collapsed ? "▸" : "▾"} Config</span>
         <span className="config-summary">
           {config
-            ? `${config.provider} / ${config.model} ${config.hasApiKey ? "(key set)" : "(no key)"}`
+            ? `${config.defaultModel} ${config.hasApiKey ? "(key set)" : "(no key)"}`
             : "loading…"}
         </span>
       </div>
       {!collapsed && (
         <div className="config-panel-body">
           <label>
-            Provider
-            <select value={provider} onChange={(e) => setProvider(e.target.value)}>
-              <option value="openai">openai</option>
-              <option value="anthropic">anthropic</option>
-            </select>
-          </label>
-          <label>
-            Model
+            Model spec
             <input
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder="gpt-4o"
+              placeholder="openai:gpt-4o"
             />
           </label>
-          <label>
-            API Key
-            <input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={config?.hasApiKey ? "•••• (unchanged)" : "sk-…"}
-            />
-          </label>
+          {config?.envVar && (
+            <label>
+              API Key
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={config?.hasApiKey ? "•••• (unchanged)" : "sk-…"}
+              />
+              <span className="config-hint">
+                Detected from env var {config.envVar}
+                {config.hasApiKey ? " (set)" : " (not set)"}
+              </span>
+            </label>
+          )}
+          {!config?.envVar && config && (
+            <span className="config-hint">
+              Unknown provider "{config.providerName}" — treated as an OpenAI-compatible base URL.
+            </span>
+          )}
           <button type="button" onClick={handleSave} disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </button>

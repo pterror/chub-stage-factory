@@ -1,6 +1,12 @@
 import { Hono } from "hono";
 import { streamText } from "ai";
-import { getModel, isProviderName } from "./providers.ts";
+import {
+  DEFAULT_MODEL,
+  getApiKeyEnvVar,
+  getApiKeyFromEnv,
+  getModel,
+  parseModelSpec,
+} from "./providers.ts";
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -9,58 +15,58 @@ interface ChatMessage {
 
 interface ChatRequest {
   messages: ChatMessage[];
-  provider?: string;
   model?: string;
 }
 
 interface RunnerConfig {
-  provider: string;
-  model: string;
-  apiKey: string;
+  defaultModel: string;
+  apiKeys: Record<string, string>;
 }
 
-function configFromEnv(): RunnerConfig {
+const runtimeConfig: RunnerConfig = {
+  defaultModel: DEFAULT_MODEL,
+  apiKeys: {},
+};
+
+function resolveApiKey(providerName: string): string | undefined {
+  return runtimeConfig.apiKeys[providerName] ?? getApiKeyFromEnv(providerName);
+}
+
+function configView() {
+  const { providerName } = parseModelSpec(runtimeConfig.defaultModel);
   return {
-    provider: process.env.RUNNER_LLM_PROVIDER ?? "openai",
-    model: process.env.RUNNER_LLM_MODEL ?? "gpt-4o",
-    apiKey: process.env.RUNNER_LLM_API_KEY ?? "",
+    defaultModel: runtimeConfig.defaultModel,
+    providerName,
+    envVar: getApiKeyEnvVar(providerName) ?? null,
+    hasApiKey: Boolean(resolveApiKey(providerName)),
   };
 }
-
-let runtimeConfig: RunnerConfig = configFromEnv();
 
 export const app = new Hono();
 
 app.get("/api/config", (c) => {
-  return c.json({
-    provider: runtimeConfig.provider,
-    model: runtimeConfig.model,
-    hasApiKey: runtimeConfig.apiKey.length > 0,
-  });
+  return c.json(configView());
 });
 
 app.post("/api/config", async (c) => {
-  const body = await c.req.json<Partial<RunnerConfig>>().catch(() => null);
+  const body = await c.req.json<{ model?: string; apiKey?: string }>().catch(() => null);
   if (!body) {
     return c.json({ error: "Invalid JSON body" }, 400);
   }
-  if (body.provider !== undefined) {
-    if (!isProviderName(body.provider)) {
-      return c.json({ error: `Unsupported provider: ${body.provider}` }, 400);
-    }
-    runtimeConfig.provider = body.provider;
-  }
   if (body.model !== undefined) {
-    runtimeConfig.model = body.model;
+    try {
+      parseModelSpec(body.model);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid model spec";
+      return c.json({ error: message }, 400);
+    }
+    runtimeConfig.defaultModel = body.model;
   }
-  if (body.apiKey !== undefined) {
-    runtimeConfig.apiKey = body.apiKey;
+  if (body.apiKey) {
+    const { providerName } = parseModelSpec(runtimeConfig.defaultModel);
+    runtimeConfig.apiKeys[providerName] = body.apiKey;
   }
-  return c.json({
-    provider: runtimeConfig.provider,
-    model: runtimeConfig.model,
-    hasApiKey: runtimeConfig.apiKey.length > 0,
-  });
+  return c.json(configView());
 });
 
 app.post("/api/chat", async (c) => {
@@ -69,23 +75,12 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "Request body must include a messages array" }, 400);
   }
 
-  const provider = body.provider ?? runtimeConfig.provider;
-  const modelId = body.model ?? runtimeConfig.model;
-  const apiKey = runtimeConfig.apiKey;
-
-  if (!apiKey) {
-    return c.json(
-      { error: "No API key configured. Set RUNNER_LLM_API_KEY or POST /api/config." },
-      400,
-    );
-  }
-
-  if (!isProviderName(provider)) {
-    return c.json({ error: `Unsupported provider: ${provider}` }, 400);
-  }
+  const spec = body.model ?? runtimeConfig.defaultModel;
 
   try {
-    const model = getModel(provider, apiKey, modelId);
+    const { providerName } = parseModelSpec(spec);
+    const apiKey = resolveApiKey(providerName);
+    const model = getModel(spec, apiKey);
     const result = streamText({
       model,
       messages: body.messages,

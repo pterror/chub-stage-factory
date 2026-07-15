@@ -271,3 +271,8 @@ body {
   color: #8fb98f;
   font-size: 0.78rem;
 }
+
+.config-hint {
+  color: #9a9a9a;
+  font-size: 0.75rem;
+}
