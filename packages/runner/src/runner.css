@@ -21,6 +21,7 @@ body {
 }
 
 .runner-root {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -210,19 +211,58 @@ body {
 }
 
 .config-panel {
-  border-bottom: 1px solid #2a2b31;
-  background: #1b1c21;
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  z-index: 50;
   font-size: 0.85rem;
 }
 
-.config-panel-header {
+.config-trigger {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 8px 14px;
+  gap: 6px;
+  background: #1b1c21;
+  color: #cfd0d8;
+  border: 1px solid #2a2b31;
+  border-radius: 6px;
+  padding: 6px 10px;
   cursor: pointer;
   user-select: none;
-  color: #cfd0d8;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.config-trigger:hover {
+  background: #24252c;
+}
+
+.config-trigger-label {
+  font-size: 0.8rem;
+}
+
+.config-panel-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 49;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.config-panel-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 260px;
+  max-width: calc(100vw - 24px);
+  background: #1b1c21;
+  border: 1px solid #2a2b31;
+  border-radius: 8px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
 .config-summary {
@@ -230,15 +270,7 @@ body {
   font-size: 0.8rem;
 }
 
-.config-panel-body {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-  padding: 0 14px 12px;
-}
-
-.config-panel-body label {
+.config-panel-dropdown label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -246,8 +278,8 @@ body {
   font-size: 0.78rem;
 }
 
-.config-panel-body input,
-.config-panel-body select {
+.config-panel-dropdown input,
+.config-panel-dropdown select {
   background: #101114;
   color: #e6e6e6;
   border: 1px solid #35363d;
@@ -256,7 +288,7 @@ body {
   font-size: 0.85rem;
 }
 
-.config-panel-body button {
+.config-panel-dropdown button {
   background: #3a5ba0;
   color: #fff;
   border: none;
@@ -265,6 +297,7 @@ body {
   cursor: pointer;
   font-size: 0.85rem;
   height: fit-content;
+  align-self: flex-start;
 }
 
 .config-status {

@@ -54,52 +54,64 @@ export function ConfigPanel() {
   }
 
   return (
-    <div className="config-panel">
-      <div className="config-panel-header" onClick={() => setCollapsed((c) => !c)}>
-        <span>{collapsed ? "▸" : "▾"} Config</span>
-        <span className="config-summary">
-          {config
-            ? `${config.defaultModel} ${config.hasApiKey ? "(key set)" : "(no key)"}`
-            : "loading…"}
-        </span>
-      </div>
+    <>
       {!collapsed && (
-        <div className="config-panel-body">
-          <label>
-            Model spec
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder="openai:gpt-4o"
-            />
-          </label>
-          {config?.envVar && (
-            <label>
-              API Key
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder={config?.hasApiKey ? "•••• (unchanged)" : "sk-…"}
-              />
-              <span className="config-hint">
-                Detected from env var {config.envVar}
-                {config.hasApiKey ? " (set)" : " (not set)"}
-              </span>
-            </label>
-          )}
-          {!config?.envVar && config && (
-            <span className="config-hint">
-              Unknown provider "{config.providerName}" — treated as an OpenAI-compatible base URL.
-            </span>
-          )}
-          <button type="button" onClick={handleSave} disabled={saving}>
-            {saving ? "Saving…" : "Save"}
-          </button>
-          {status && <span className="config-status">{status}</span>}
-        </div>
+        <div className="config-panel-backdrop" onClick={() => setCollapsed(true)} />
       )}
-    </div>
+      <div className="config-panel">
+        <button
+          type="button"
+          className="config-trigger"
+          onClick={() => setCollapsed((c) => !c)}
+          aria-expanded={!collapsed}
+        >
+          <span aria-hidden="true">⚙</span>
+          <span className="config-trigger-label">Config</span>
+        </button>
+        {!collapsed && (
+          <div className="config-panel-dropdown">
+            <div className="config-summary">
+              {config
+                ? `${config.defaultModel} ${config.hasApiKey ? "(key set)" : "(no key)"}`
+                : "loading…"}
+            </div>
+            <label>
+              Model spec
+              <input
+                type="text"
+                value={model}
+                onChange={(e) => setModel(e.target.value)}
+                placeholder="openai:gpt-4o"
+              />
+            </label>
+            {config?.envVar && (
+              <label>
+                API Key
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder={config?.hasApiKey ? "•••• (unchanged)" : "sk-…"}
+                />
+                <span className="config-hint">
+                  Detected from env var {config.envVar}
+                  {config.hasApiKey ? " (set)" : " (not set)"}
+                </span>
+              </label>
+            )}
+            {!config?.envVar && config && (
+              <span className="config-hint">
+                Unknown provider "{config.providerName}" — treated as an OpenAI-compatible base
+                URL.
+              </span>
+            )}
+            <button type="button" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </button>
+            {status && <span className="config-status">{status}</span>}
+          </div>
+        )}
+      </div>
+    </>
   );
 }

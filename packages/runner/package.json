@@ -8,7 +8,8 @@
     "dev:server": "bun run src/standalone.ts",
     "dev:client": "vite",
     "build": "vite build",
-    "start": "NODE_ENV=production bun run src/standalone.ts"
+    "start": "NODE_ENV=production bun run src/standalone.ts",
+    "runner": "bun run src/cli.ts"
   },
   "dependencies": {
     "hono": "^4",

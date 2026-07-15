@@ -14,7 +14,7 @@
   "license": "UNLICENSED",
   "scripts": {
     "dev": "vite",
-    "runner": "vite",
+    "runner": "bun run --filter @chub-stage-factory/runner runner",
     "dev:runner": "bun run --filter @chub-stage-factory/runner dev",
     "build:standalone": "bun run --filter @chub-stage-factory/runner build",
     "dev:example": "VITE_EXAMPLE=$EXAMPLE vite",
