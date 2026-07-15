@@ -1,0 +1,31 @@
+{
+  "name": "@chub-stage-factory/runner",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"bun run dev:server\" \"bun run dev:client\"",
+    "dev:server": "bun run src/standalone.ts",
+    "dev:client": "vite",
+    "build": "vite build",
+    "start": "NODE_ENV=production bun run src/standalone.ts"
+  },
+  "dependencies": {
+    "hono": "^4",
+    "@hono/node-server": "^1",
+    "ai": "^4",
+    "@ai-sdk/openai": "^1",
+    "@ai-sdk/anthropic": "^1",
+    "@chub-ai/stages-ts": "^0.3.7",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^10.0.3",
+    "typescript": "^5.2.2",
+    "vite": "^5.2.0"
+  }
+}

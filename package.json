@@ -3,6 +3,9 @@
   "private": false,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "files": [
     "dist"
   ],
@@ -12,6 +15,8 @@
   "scripts": {
     "dev": "vite",
     "runner": "vite",
+    "dev:runner": "bun run --filter @chub-stage-factory/runner dev",
+    "build:standalone": "bun run --filter @chub-stage-factory/runner build",
     "dev:example": "VITE_EXAMPLE=$EXAMPLE vite",
     "build": "tsc && vite build",
     "build:headless": "vite build --mode headless",

@@ -39,3 +39,6 @@ creation.json
 .normalize/*
 !.normalize/config.toml
 !.normalize/memory/
+
+# Runner secrets
+packages/runner/.env.local

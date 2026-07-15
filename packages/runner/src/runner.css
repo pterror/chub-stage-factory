@@ -1,0 +1,273 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: #16171b;
+  color: #e6e6e6;
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+}
+
+.runner-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #16171b;
+}
+
+.runner-root.centered {
+  align-items: center;
+  justify-content: center;
+}
+
+.runner-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.stage-panel {
+  flex: 1 1 55%;
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid #2a2b31;
+  background: #101114;
+}
+
+.chat-panel {
+  flex: 1 1 45%;
+  min-width: 320px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #1b1c21;
+}
+
+.message-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.empty-hint {
+  color: #7a7c85;
+  text-align: center;
+  margin-top: 24px;
+  font-size: 0.9rem;
+}
+
+.message-row {
+  display: flex;
+}
+
+.message-row.user {
+  justify-content: flex-end;
+}
+
+.message-row.assistant,
+.message-row.system {
+  justify-content: flex-start;
+}
+
+.message-bubble {
+  max-width: 82%;
+  padding: 8px 12px;
+  border-radius: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.92rem;
+  line-height: 1.4;
+}
+
+.message-bubble.user {
+  background: #3a5ba0;
+  color: #f2f4fb;
+  border-bottom-right-radius: 2px;
+}
+
+.message-bubble.assistant {
+  background: #2a2b31;
+  color: #e6e6e6;
+  border-bottom-left-radius: 2px;
+}
+
+.message-bubble.system {
+  background: transparent;
+  border: 1px dashed #3a3b42;
+  color: #9a9ba5;
+  font-style: italic;
+}
+
+.swipe-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: #a9abb5;
+}
+
+.swipe-controls button {
+  background: none;
+  border: 1px solid #45464e;
+  color: #e6e6e6;
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
+.swipe-controls button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.loading-indicator {
+  color: #8b8d97;
+  font-size: 0.85rem;
+  padding: 4px 2px;
+}
+
+.error-banner {
+  background: #4a2020;
+  color: #ffb4b4;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #612b2b;
+}
+
+.chat-input-row {
+  border-top: 1px solid #2a2b31;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chat-textarea {
+  width: 100%;
+  resize: none;
+  background: #101114;
+  color: #e6e6e6;
+  border: 1px solid #35363d;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.92rem;
+}
+
+.chat-textarea:focus {
+  outline: none;
+  border-color: #3a5ba0;
+}
+
+.chat-input-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.chat-input-actions button {
+  border: none;
+  border-radius: 6px;
+  padding: 7px 16px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.send-btn {
+  background: #3a5ba0;
+  color: #fff;
+}
+
+.send-btn:disabled {
+  background: #2c3a54;
+  color: #8b93a5;
+  cursor: default;
+}
+
+.regenerate-btn {
+  background: #2a2b31;
+  color: #e6e6e6;
+}
+
+.config-panel {
+  border-bottom: 1px solid #2a2b31;
+  background: #1b1c21;
+  font-size: 0.85rem;
+}
+
+.config-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  cursor: pointer;
+  user-select: none;
+  color: #cfd0d8;
+}
+
+.config-summary {
+  color: #8b8d97;
+  font-size: 0.8rem;
+}
+
+.config-panel-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 0 14px 12px;
+}
+
+.config-panel-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #a9abb5;
+  font-size: 0.78rem;
+}
+
+.config-panel-body input,
+.config-panel-body select {
+  background: #101114;
+  color: #e6e6e6;
+  border: 1px solid #35363d;
+  border-radius: 5px;
+  padding: 5px 8px;
+  font-size: 0.85rem;
+}
+
+.config-panel-body button {
+  background: #3a5ba0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 14px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  height: fit-content;
+}
+
+.config-status {
+  color: #8fb98f;
+  font-size: 0.78rem;
+}

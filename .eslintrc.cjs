@@ -41,6 +41,18 @@ module.exports = {
       },
     },
     {
+      // Structural any: the standalone runner's ChatUI/StageRunner accept
+      // StageBase<any, any, any, any> because they must host arbitrary
+      // stages whose Init/Chat/Message/Config types aren't known statically.
+      files: [
+        'packages/runner/src/ChatUI.tsx',
+        'packages/runner/src/StageRunner.tsx',
+      ],
+      rules: {
+        '@typescript-eslint/no-explicit-any': 'off',
+      },
+    },
+    {
       // Chub Stage files export one class (not a component) alongside React
       // helper components in the same file — this is the required Chub pattern.
       // react-refresh/only-export-components fires on every example Stage.tsx.
